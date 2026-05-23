@@ -1,0 +1,57 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./index.html', './src/**/*.{ts,tsx}'],
+  theme: {
+    extend: {
+      colors: {
+        void:    '#070709',
+        surface: '#0E0E14',
+        raised:  '#161622',
+        border:  '#252535',
+        rim:     '#363650',
+        spark: {
+          50:  '#EEEEFF',
+          100: '#DDDEFF',
+          200: '#BBBCFF',
+          300: '#9899FF',
+          400: '#7677FF',
+          500: '#5456F5',
+          600: '#3D3FDD',
+          700: '#2E30B5',
+          800: '#21238A',
+          900: '#16185E',
+        },
+        phase1: '#00C896',
+        phase2: '#FF6B4A',
+        phase3: '#7C8FFF',
+        phase4: '#FFB547',
+        phase5: '#C278FF',
+        ok:   '#00C896',
+        warn: '#FFB547',
+        fail: '#FF5263',
+        ink:    '#F2F1FF',
+        dim:    '#9896B8',
+        ghost:  '#4A4864',
+      },
+      fontFamily: {
+        heading: ['"Syne"', 'sans-serif'],
+        body:    ['"DM Sans"', 'sans-serif'],
+        mono:    ['"Geist Mono"', '"JetBrains Mono"', 'monospace'],
+      },
+      animation: {
+        'fade-up':    'fadeUp 0.4s ease forwards',
+        'fade-in':    'fadeIn 0.3s ease forwards',
+        'pulse-slow': 'pulse 3s ease-in-out infinite',
+        'shimmer':    'shimmer 2s linear infinite',
+        'spark':      'spark 0.6s ease forwards',
+      },
+      keyframes: {
+        fadeUp:  { from: { opacity: '0', transform: 'translateY(12px)' }, to: { opacity: '1', transform: 'translateY(0)' } },
+        fadeIn:  { from: { opacity: '0' }, to: { opacity: '1' } },
+        shimmer: { from: { backgroundPosition: '-200% 0' }, to: { backgroundPosition: '200% 0' } },
+        spark:   { '0%': { transform: 'scale(0.8)', opacity: '0' }, '60%': { transform: 'scale(1.1)' }, '100%': { transform: 'scale(1)', opacity: '1' } },
+      },
+    },
+  },
+  plugins: [],
+}

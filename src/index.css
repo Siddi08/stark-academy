@@ -1,0 +1,145 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&family=Geist+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  html {
+    @apply bg-void text-ink;
+    font-family: 'DM Sans', sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  h1, h2, h3, h4, h5, h6 { font-family: 'Syne', sans-serif; }
+  ::selection { @apply bg-spark-500/30 text-ink; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-rim rounded-full; }
+  :focus-visible { @apply outline outline-2 outline-offset-2 outline-spark-400; }
+}
+
+@layer components {
+  /* ── Cards ── */
+  .card {
+    @apply bg-surface border border-border rounded-2xl;
+  }
+  .card-raised {
+    @apply bg-raised border border-border rounded-2xl;
+  }
+  .card-glow {
+    @apply bg-surface border border-spark-500/30 rounded-2xl
+           shadow-[0_0_24px_-4px_rgba(84,86,245,0.25)];
+  }
+
+  /* ── Buttons ── */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2
+           font-medium rounded-xl transition-all duration-150
+           cursor-pointer select-none
+           disabled:opacity-40 disabled:cursor-not-allowed
+           active:scale-[0.97];
+    font-family: 'Syne', sans-serif;
+  }
+  .btn-sm  { @apply btn text-xs px-3 py-1.5 min-h-[34px]; }
+  .btn-md  { @apply btn text-sm px-4 py-2.5 min-h-[44px]; }
+  .btn-lg  { @apply btn text-base px-6 py-3 min-h-[52px]; }
+  .btn-primary  { @apply btn-md bg-spark-500 text-white hover:bg-spark-400 shadow-[0_0_16px_-4px_rgba(84,86,245,0.6)]; }
+  .btn-secondary { @apply btn-md bg-raised border border-rim text-ink hover:bg-border; }
+  .btn-ghost    { @apply btn-md text-dim hover:text-ink hover:bg-raised; }
+  .btn-danger   { @apply btn-md bg-fail/10 border border-fail/30 text-fail hover:bg-fail/20; }
+  .btn-sync     { @apply btn-md bg-ok/10 border border-ok/30 text-ok hover:bg-ok/20; }
+
+  /* ── Form inputs ── */
+  .input {
+    @apply w-full bg-raised border border-border rounded-xl
+           px-4 py-3 text-ink placeholder:text-ghost
+           focus:outline-none focus:border-spark-500 focus:ring-1 focus:ring-spark-500/30
+           transition-colors;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .input-sm { @apply input py-2 px-3 text-sm; }
+
+  /* ── Badge ── */
+  .badge {
+    @apply inline-flex items-center gap-1
+           text-xs font-medium px-2.5 py-1 rounded-full;
+    font-family: 'Syne', sans-serif;
+  }
+
+  /* ── Progress bar ── */
+  .progress-track {
+    @apply w-full bg-raised rounded-full overflow-hidden;
+  }
+  .progress-fill {
+    @apply h-full rounded-full transition-all duration-500 ease-out;
+  }
+
+  /* ── Prose (lesson content) ── */
+  .prose-iron h1 { @apply text-2xl font-heading font-bold text-ink mt-8 mb-4 leading-tight; }
+  .prose-iron h2 { @apply text-xl font-heading font-semibold text-ink mt-7 mb-3; }
+  .prose-iron h3 { @apply text-lg font-heading font-semibold text-spark-300 mt-5 mb-2; }
+  .prose-iron p  { @apply text-dim leading-7 mb-4; }
+  .prose-iron ul { @apply list-none mb-4 space-y-1.5; }
+  .prose-iron ul li { @apply flex gap-2 text-dim leading-7; }
+  .prose-iron ul li::before { content: '›'; @apply text-spark-400 font-bold; }
+  .prose-iron ol { @apply list-decimal list-inside mb-4 space-y-1.5 text-dim; }
+  .prose-iron strong { @apply text-ink font-semibold; }
+  .prose-iron em    { @apply text-spark-200 italic; }
+  .prose-iron code  {
+    @apply font-mono text-sm bg-raised border border-border
+           px-2 py-0.5 rounded-lg text-spark-300;
+  }
+  .prose-iron pre {
+    @apply bg-raised border border-border rounded-2xl p-5
+           overflow-x-auto mb-5 shadow-inner;
+  }
+  .prose-iron pre code { @apply bg-transparent border-none p-0 text-dim text-sm; }
+  .prose-iron blockquote {
+    @apply border-l-2 border-spark-500 pl-5 py-1
+           text-dim italic mb-4 rounded-r-lg bg-spark-500/5;
+  }
+  .prose-iron a { @apply text-spark-300 underline underline-offset-2 hover:text-spark-200; }
+  .prose-iron hr { @apply border-border my-8; }
+  .prose-iron table { @apply w-full mb-4 border-collapse; }
+  .prose-iron th { @apply text-left px-4 py-2 border-b border-rim text-ink font-heading text-sm; }
+  .prose-iron td { @apply px-4 py-2 border-b border-border text-dim text-sm; }
+
+  /* ── Shimmer loading ── */
+  .skeleton {
+    @apply bg-raised rounded-xl overflow-hidden relative;
+  }
+  .skeleton::after {
+    content: '';
+    @apply absolute inset-0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.8s linear infinite;
+  }
+
+  /* ── Phase colour utilities ── */
+  .phase-1 { color: theme('colors.phase1'); }
+  .phase-2 { color: theme('colors.phase2'); }
+  .phase-3 { color: theme('colors.phase3'); }
+  .phase-4 { color: theme('colors.phase4'); }
+  .phase-5 { color: theme('colors.phase5'); }
+  .bg-phase-1 { background-color: theme('colors.phase1'); }
+  .bg-phase-2 { background-color: theme('colors.phase2'); }
+  .bg-phase-3 { background-color: theme('colors.phase3'); }
+  .bg-phase-4 { background-color: theme('colors.phase4'); }
+  .bg-phase-5 { background-color: theme('colors.phase5'); }
+}
+
+/* ── Arc progress node indicator ── */
+.arc-node {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  position: relative;
+}
+.arc-node.complete { background: theme('colors.ok'); }
+.arc-node.active {
+  background: theme('colors.spark.500');
+  box-shadow: 0 0 8px theme('colors.spark.500');
+  animation: pulse 2s ease-in-out infinite;
+}
+.arc-node.locked { background: theme('colors.ghost'); }
