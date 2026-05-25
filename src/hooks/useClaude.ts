@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
-import { useApiKey } from '@/store/useAppStore'
+import { useWorkerUrl } from '@/store/useAppStore'
 
 type MessageParam = { role: 'user' | 'assistant'; content: string }
 
@@ -34,7 +34,7 @@ export interface UseClaudeReturn {
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useClaude(options: UseClaudeOptions = {}): UseClaudeReturn {
-  const apiKey = useApiKey()
+  const workerUrl = useWorkerUrl()
   const [streaming, setStreaming] = useState(false)
   const [output, setOutput] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -44,8 +44,8 @@ export function useClaude(options: UseClaudeOptions = {}): UseClaudeReturn {
     userMessage: string,
     history: ClaudeMessage[] = [],
   ) => {
-    if (!apiKey) {
-      setError('No API key set. Go to Settings → Anthropic API Key.')
+    if (!workerUrl) {
+      setError('No Worker URL set. Go to Settings → AI Tutor and paste your Worker URL.')
       return
     }
 
@@ -59,44 +59,78 @@ export function useClaude(options: UseClaudeOptions = {}): UseClaudeReturn {
     setError(null)
 
     try {
-      const { default: Anthropic } = await import('@anthropic-ai/sdk')
-      const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true })
-
       const messages: MessageParam[] = [
         ...history.map(m => ({ role: m.role, content: m.content })),
         { role: 'user', content: userMessage },
       ]
 
-      const stream = client.messages.stream({
-        model: options.model ?? 'claude-sonnet-4-20250514',
-        max_tokens: options.maxTokens ?? 2048,
-        system: options.system,
-        messages,
+      const res = await fetch(workerUrl.replace(/\/$/, ''), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model:      options.model ?? 'claude-sonnet-4-20250514',
+          max_tokens: options.maxTokens ?? 2048,
+          stream:     true,
+          ...(options.system ? { system: options.system } : {}),
+          messages,
+        }),
+        signal: controller.signal,
       })
 
-      for await (const event of stream) {
-        if (controller.signal.aborted) break
-        if (
-          event.type === 'content_block_delta' &&
-          event.delta.type === 'text_delta'
-        ) {
-          setOutput(prev => prev + (event.delta as { text: string }).text)
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`Worker returned ${res.status}: ${text}`)
+      }
+
+      if (!res.body) throw new Error('Empty response body from Worker')
+
+      // ── Parse SSE stream ────────────────────────────────────────────────────
+      const reader  = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer    = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done || controller.signal.aborted) break
+
+        buffer += decoder.decode(value, { stream: true })
+
+        // SSE is newline-delimited; keep the last (possibly incomplete) line
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const payload = line.slice(6).trim()
+          if (payload === '[DONE]') continue
+          try {
+            const event = JSON.parse(payload)
+            if (
+              event.type === 'content_block_delta' &&
+              event.delta?.type === 'text_delta' &&
+              typeof event.delta?.text === 'string'
+            ) {
+              setOutput(prev => prev + event.delta.text)
+            }
+          } catch {
+            // Skip malformed SSE chunks
+          }
         }
       }
     } catch (err) {
       if ((err as Error).name === 'AbortError') return
-      const message = err instanceof Error ? err.message : 'Unexpected error'
+      const msg = err instanceof Error ? err.message : 'Unexpected error'
       setError(
-        message.includes('401') || message.includes('invalid_api_key')
-          ? 'Invalid API key. Check your key in Settings.'
-          : message.includes('429')
-          ? 'Rate limit reached. Wait a moment and try again.'
-          : `Error: ${message}`,
+        msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('fetch')
+          ? 'Cannot reach the AI Tutor Worker. Check your Worker URL in Settings.'
+          : msg.includes('Worker returned 5')
+          ? 'Worker error — make sure ANTHROPIC_API_KEY is set as a Worker secret.'
+          : `Error: ${msg}`,
       )
     } finally {
       setStreaming(false)
     }
-  }, [apiKey, options.system, options.maxTokens, options.model])
+  }, [workerUrl, options.system, options.maxTokens, options.model])
 
   const abort = useCallback(() => {
     abortRef.current?.abort()

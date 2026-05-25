@@ -1,8 +1,7 @@
-// Anthropic API client — full implementation in Phase 1
 import type { ClaudeGradingResult, QuizQuestion } from '@/types'
 
 export interface GradeQuizParams {
-  apiKey: string
+  workerUrl: string
   moduleTitle: string
   questions: QuizQuestion[]
   answers: Record<string, string>
@@ -10,26 +9,42 @@ export interface GradeQuizParams {
 }
 
 export interface ExplainConceptParams {
-  apiKey: string
+  workerUrl: string
   lessonTitle: string
   concept: string
   lessonContent: string
 }
 
 export interface ChatInLessonParams {
-  apiKey: string
+  workerUrl: string
   lessonTitle: string
   lessonContent: string
   history: { role: 'user' | 'assistant'; content: string }[]
   userMessage: string
 }
 
+// ─── Internal helper ──────────────────────────────────────────────────────────
+
+/** POST a messages request to the Worker (non-streaming) and return the text. */
+async function workerPost(workerUrl: string, body: object): Promise<string> {
+  const res = await fetch(workerUrl.replace(/\/$/, ''), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Worker error ${res.status}: ${text}`)
+  }
+  const data = await res.json() as { content?: Array<{ type: string; text?: string }> }
+  return data.content?.[0]?.type === 'text' ? (data.content[0].text ?? '') : ''
+}
+
+// ─── Exported helpers ─────────────────────────────────────────────────────────
+
 const conceptCache = new Map<string, string>()
 
 export async function gradeQuiz(params: GradeQuizParams): Promise<ClaudeGradingResult> {
-  const Anthropic = (await import('@anthropic-ai/sdk')).default
-  const client = new Anthropic({ apiKey: params.apiKey, dangerouslyAllowBrowser: true })
-
   const questionsText = params.questions.map((q, i) => {
     const answer = params.answers[q.id] ?? '(no answer)'
     return `Q${i + 1} [${q.type}] (${q.xpValue} XP): ${q.question}\nAnswer: ${answer}\nRubric: ${q.gradingRubric}`
@@ -56,22 +71,20 @@ Return this exact shape:
   "xpAwarded": <number>
 }`
 
-  async function callClaude(): Promise<string> {
-    const res = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+  async function call(): Promise<string> {
+    return workerPost(params.workerUrl, {
+      model:      'claude-sonnet-4-20250514',
       max_tokens: 1500,
-      messages: [{ role: 'user', content: prompt }],
+      messages:   [{ role: 'user', content: prompt }],
     })
-    return res.content[0].type === 'text' ? res.content[0].text : ''
   }
 
   try {
-    let text = await callClaude()
+    let text = await call()
     try {
       return JSON.parse(text) as ClaudeGradingResult
     } catch {
-      // Retry once
-      text = await callClaude()
+      text = await call()  // retry once
       return JSON.parse(text) as ClaudeGradingResult
     }
   } catch (err) {
@@ -83,14 +96,11 @@ export async function explainConcept(params: ExplainConceptParams): Promise<stri
   const cacheKey = `${params.lessonTitle}::${params.concept}`
   if (conceptCache.has(cacheKey)) return conceptCache.get(cacheKey)!
 
-  const Anthropic = (await import('@anthropic-ai/sdk')).default
-  const client = new Anthropic({ apiKey: params.apiKey, dangerouslyAllowBrowser: true })
-
-  const res = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+  const text = await workerPost(params.workerUrl, {
+    model:      'claude-sonnet-4-20250514',
     max_tokens: 800,
-    messages: [{
-      role: 'user',
+    messages:   [{
+      role:    'user',
       content: `You are a tutor for Stark Academy. The student is reading: "${params.lessonTitle}".
 
 Explain this concept clearly and concisely: "${params.concept}"
@@ -102,45 +112,36 @@ Give a clear explanation in 2-4 paragraphs. Use examples where helpful.`,
     }],
   })
 
-  const text = res.content[0].type === 'text' ? res.content[0].text : ''
   conceptCache.set(cacheKey, text)
   return text
 }
 
 export async function chatInLesson(params: ChatInLessonParams): Promise<string> {
-  const Anthropic = (await import('@anthropic-ai/sdk')).default
-  const client = new Anthropic({ apiKey: params.apiKey, dangerouslyAllowBrowser: true })
-
-  const systemPrompt = `You are a knowledgeable, encouraging tutor for Stark Academy — an AI curriculum.
-The student is currently reading: "${params.lessonTitle}".
-Help them understand the material. Be concise but thorough. Use examples.`
-
-  const messages = [
-    ...params.history.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-    { role: 'user' as const, content: params.userMessage },
-  ]
-
-  const res = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+  return workerPost(params.workerUrl, {
+    model:      'claude-sonnet-4-20250514',
     max_tokens: 1000,
-    system: systemPrompt,
-    messages,
+    system:     `You are a knowledgeable, encouraging tutor for Stark Academy — an AI curriculum.
+The student is currently reading: "${params.lessonTitle}".
+Help them understand the material. Be concise but thorough. Use examples.`,
+    messages:   [
+      ...params.history.map(m => ({ role: m.role, content: m.content })),
+      { role: 'user', content: params.userMessage },
+    ],
   })
-
-  return res.content[0].type === 'text' ? res.content[0].text : ''
 }
 
-export async function testApiKey(apiKey: string): Promise<boolean> {
+/**
+ * Ping the Worker to verify it's reachable and correctly deployed.
+ * Returns true if the worker responds with { ok: true }.
+ */
+export async function pingWorker(workerUrl: string): Promise<boolean> {
   try {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default
-    const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true })
-    const res = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 10,
-      messages: [{ role: 'user', content: 'Reply with just: OK' }],
+    const res = await fetch(`${workerUrl.replace(/\/$/, '')}/ping`, {
+      signal: AbortSignal.timeout(5000),
     })
-    const text = res.content[0].type === 'text' ? res.content[0].text : ''
-    return text.includes('OK')
+    if (!res.ok) return false
+    const data = await res.json() as { ok?: boolean }
+    return data.ok === true
   } catch {
     return false
   }

@@ -1,21 +1,21 @@
 import { useState } from 'react'
-import { Eye, EyeOff, Check, Loader2 } from 'lucide-react'
+import { Check, Loader2 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { useAppStore } from '@/store/useAppStore'
 import { useShallow } from 'zustand/react/shallow'
-import { testApiKey } from '@/api/anthropic'
-import { exportSave, importSave, clearSave } from '@/utils/save'
+import { pingWorker } from '@/api/anthropic'
+import { exportSave, clearSave } from '@/utils/save'
 import { useSync } from '@/hooks/useSync'
 
 export default function SettingsScreen() {
   const {
-    apiKey, setApiKey,
+    workerUrl, setWorkerUrl,
     syncServerUrl, setSyncServerUrl,
     githubToken, setGithubToken,
     progress, setUserName,
     addToast,
   } = useAppStore(useShallow(s => ({
-    apiKey: s.apiKey,           setApiKey: s.setApiKey,
+    workerUrl: s.workerUrl,         setWorkerUrl: s.setWorkerUrl,
     syncServerUrl: s.syncServerUrl, setSyncServerUrl: s.setSyncServerUrl,
     githubToken: s.githubToken,     setGithubToken: s.setGithubToken,
     progress: s.progress,
@@ -25,26 +25,34 @@ export default function SettingsScreen() {
 
   const { sync, isSyncing } = useSync()
 
-  const [showKey, setShowKey] = useState(false)
-  const [testingKey, setTestingKey] = useState(false)
-  const [keyValid, setKeyValid] = useState<boolean | null>(null)
+  const [localWorkerUrl, setLocalWorkerUrl] = useState(workerUrl)
+  const [testingWorker, setTestingWorker] = useState(false)
+  const [workerOk, setWorkerOk] = useState<boolean | null>(null)
   const [localName, setLocalName] = useState(progress.userName)
 
-  async function handleTestKey() {
-    if (!apiKey) return
-    setTestingKey(true)
-    setKeyValid(null)
+  async function handleTestWorker() {
+    const url = localWorkerUrl.trim()
+    if (!url) return
+    setTestingWorker(true)
+    setWorkerOk(null)
     try {
-      const ok = await testApiKey(apiKey)
-      setKeyValid(ok)
+      const ok = await pingWorker(url)
+      setWorkerOk(ok)
       addToast({
         variant: ok ? 'success' : 'error',
-        title: ok ? 'API key valid' : 'API key invalid',
-        body: ok ? 'Connected to Anthropic.' : 'Check your key and try again.',
+        title:   ok ? 'Worker reachable' : 'Worker unreachable',
+        body:    ok
+          ? 'AI Tutor is ready to use.'
+          : 'Could not reach the Worker. Check the URL and make sure it is deployed.',
       })
     } finally {
-      setTestingKey(false)
+      setTestingWorker(false)
     }
+  }
+
+  function handleSaveWorkerUrl() {
+    setWorkerUrl(localWorkerUrl.trim())
+    addToast({ variant: 'success', title: 'Worker URL saved' })
   }
 
   function handleSaveName() {
@@ -92,54 +100,56 @@ export default function SettingsScreen() {
         </div>
       </section>
 
-      {/* ── Anthropic API Key ── */}
+      {/* ── AI Tutor ── */}
       <section className="card p-5 space-y-4">
         <div className="flex items-center gap-2">
-          <h2 className="font-heading text-sm uppercase tracking-widest text-dim">Anthropic API Key</h2>
+          <h2 className="font-heading text-sm uppercase tracking-widest text-dim">AI Tutor</h2>
           <span className="font-mono text-[10px] text-ghost border border-border rounded px-1.5 py-0.5">optional</span>
         </div>
-        <p className="text-xs text-ghost">
-          Enables the AI Tutor panel inside lessons. Quizzes work without it — you download your answers as a text file and paste them into{' '}
-          <a href="https://claude.ai" target="_blank" rel="noreferrer" className="text-spark-300 underline">claude.ai</a>{' '}
-          to get a grade. Get an API key from{' '}
-          <a href="https://console.anthropic.com" target="_blank" rel="noreferrer" className="text-spark-300 underline">
-            console.anthropic.com
-          </a>
+        <p className="text-xs text-ghost leading-relaxed">
+          Enables the AI Tutor chat panel inside every lesson and AI-powered project verification.
+          Your Anthropic API key stays server-side in a Cloudflare Worker — it never touches this app.
+          See the{' '}
+          <a
+            href="https://github.com/siddi08/stark-academy/blob/main/stark-proxy/README.md"
+            target="_blank"
+            rel="noreferrer"
+            className="text-spark-300 underline"
+          >
+            Worker setup guide
+          </a>{' '}
+          in the repo.
         </p>
         <div className="flex gap-2">
-          <div className="relative flex-1">
-            <input
-              type={showKey ? 'text' : 'password'}
-              className="input pr-10"
-              value={apiKey}
-              onChange={e => { setApiKey(e.target.value); setKeyValid(null) }}
-              placeholder="sk-ant-..."
-              autoComplete="off"
-            />
-            <button
-              onClick={() => setShowKey(v => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-ghost hover:text-dim min-h-[44px] min-w-[44px] flex items-center justify-center"
-              type="button"
-            >
-              {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
+          <input
+            className="input flex-1 font-mono text-sm"
+            value={localWorkerUrl}
+            onChange={e => { setLocalWorkerUrl(e.target.value); setWorkerOk(null) }}
+            placeholder="https://stark-proxy.your-name.workers.dev"
+            type="url"
+            autoComplete="off"
+          />
           <button
-            onClick={handleTestKey}
-            disabled={!apiKey || testingKey}
+            onClick={handleTestWorker}
+            disabled={!localWorkerUrl.trim() || testingWorker}
             className={cn(
               'btn-secondary px-4 shrink-0',
-              keyValid === true  && 'border-ok/30 text-ok',
-              keyValid === false && 'border-fail/30 text-fail',
+              workerOk === true  && 'border-ok/30 text-ok',
+              workerOk === false && 'border-fail/30 text-fail',
             )}
           >
-            {testingKey
+            {testingWorker
               ? <Loader2 size={14} className="animate-spin" />
-              : keyValid === true
+              : workerOk === true
               ? <Check size={14} />
               : 'Test'}
           </button>
         </div>
+        {localWorkerUrl.trim() !== workerUrl && (
+          <button onClick={handleSaveWorkerUrl} className="btn-primary w-full">
+            Save Worker URL
+          </button>
+        )}
       </section>
 
       {/* ── LAN Sync ── */}

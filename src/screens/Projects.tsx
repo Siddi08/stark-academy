@@ -37,8 +37,8 @@ function ProjectCard({ project, moduleTitle, moduleNumber }: ProjectCardProps) {
   const [verifying, setVerifying] = useState(false)
   const [verifyResult, setVerifyResult] = useState<GithubVerifyResult | null>(null)
 
-  const { apiKey, githubToken } = useAppStore(useShallow(s => ({
-    apiKey: s.apiKey,
+  const { workerUrl, githubToken } = useAppStore(useShallow(s => ({
+    workerUrl: s.workerUrl,
     githubToken: s.githubToken,
   })))
   const { updateProjectStatus, setProjectRepo, progress, addToast } = useAppStore(useShallow(s => ({
@@ -54,14 +54,14 @@ function ProjectCard({ project, moduleTitle, moduleNumber }: ProjectCardProps) {
   async function handleVerify() {
     const url = repoInput.trim() || savedRepo
     if (!url) { addToast({ variant: 'error', title: 'Enter a GitHub URL first' }); return }
-    if (!apiKey) { addToast({ variant: 'error', title: 'API key required for verification', body: 'Add your Anthropic API key in Settings.' }); return }
+    if (!workerUrl) { addToast({ variant: 'error', title: 'AI Tutor Worker required', body: 'Add your Worker URL in Settings → AI Tutor.' }); return }
 
     setVerifying(true)
     setVerifyResult(null)
 
     try {
       const result = await verifyRepo({
-        apiKey,
+        workerUrl,
         repoUrl: url,
         projectName: project.name,
         rubric: project.rubric,

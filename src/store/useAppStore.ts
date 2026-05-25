@@ -45,6 +45,7 @@ function makeInitialProgress(): UserProgress {
 interface AppStore {
   // ── Persisted state ────────────────────────────────────────────────────────
   progress: UserProgress
+  workerUrl: string
   apiKey: string
   syncServerUrl: string
   githubToken: string
@@ -81,6 +82,7 @@ interface AppStore {
 
   // ── Settings actions ───────────────────────────────────────────────────────
 
+  setWorkerUrl(url: string): void
   setApiKey(key: string): void
   setSyncServerUrl(url: string): void
   setGithubToken(token: string): void
@@ -120,6 +122,7 @@ export const useAppStore = create<AppStore>()(
     (set, get) => ({
       // ── Initial state ────────────────────────────────────────────────────────
       progress: makeInitialProgress(),
+      workerUrl: '',
       apiKey: '',
       syncServerUrl: '',
       githubToken: '',
@@ -279,6 +282,7 @@ export const useAppStore = create<AppStore>()(
 
       // ── Settings ─────────────────────────────────────────────────────────────
 
+      setWorkerUrl(url) { set({ workerUrl: url }) },
       setApiKey(key) { set({ apiKey: key }) },
       setSyncServerUrl(url) { set({ syncServerUrl: url }) },
       setGithubToken(token) { set({ githubToken: token }) },
@@ -352,6 +356,7 @@ export const useAppStore = create<AppStore>()(
       // Only persist these fields; toasts and syncStatus are ephemeral
       partialize: (s) => ({
         progress: s.progress,
+        workerUrl: s.workerUrl,
         apiKey: s.apiKey,
         syncServerUrl: s.syncServerUrl,
         githubToken: s.githubToken,
@@ -362,7 +367,8 @@ export const useAppStore = create<AppStore>()(
 
 // ─── Convenience selector hooks ───────────────────────────────────────────────
 
-export const useProgress = () => useAppStore(s => s.progress)
-export const useApiKey   = () => useAppStore(s => s.apiKey)
-export const useToasts   = () => useAppStore(s => s.toasts)
+export const useProgress   = () => useAppStore(s => s.progress)
+export const useWorkerUrl  = () => useAppStore(s => s.workerUrl)
+export const useApiKey     = () => useAppStore(s => s.apiKey)
+export const useToasts     = () => useAppStore(s => s.toasts)
 export const useSyncStatus = () => useAppStore(s => s.syncStatus)

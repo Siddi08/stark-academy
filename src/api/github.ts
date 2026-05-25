@@ -1,7 +1,7 @@
 import type { GithubVerifyResult } from '@/types'
 
 export interface VerifyRepoParams {
-  apiKey: string
+  workerUrl: string
   repoUrl: string
   projectName: string
   rubric: string[]
@@ -57,18 +57,17 @@ export async function verifyRepo(params: VerifyRepoParams): Promise<GithubVerify
 
     let readmeContent = ''
     if (readmeRes.ok) {
-      const readmeData = await readmeRes.json()
-      readmeContent = atob(readmeData.content.replace(/\n/g, ''))
+      const readmeData = await readmeRes.json() as { content?: string }
+      if (readmeData.content) {
+        readmeContent = atob(readmeData.content.replace(/\n/g, ''))
+      }
     }
 
     let fileTree: string[] = []
     if (treeRes.ok) {
-      const treeData = await treeRes.json()
-      fileTree = treeData.tree?.map((f: { path: string }) => f.path) ?? []
+      const treeData = await treeRes.json() as { tree?: Array<{ path: string }> }
+      fileTree = treeData.tree?.map(f => f.path) ?? []
     }
-
-    const Anthropic = (await import('@anthropic-ai/sdk')).default
-    const client = new Anthropic({ apiKey: params.apiKey, dangerouslyAllowBrowser: true })
 
     const prompt = `You are verifying a student's GitHub project for Stark Academy.
 
@@ -94,13 +93,24 @@ CRITICAL: respond with ONLY valid JSON, no markdown, no code fences:
   ]
 }`
 
-    const res = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1500,
-      messages: [{ role: 'user', content: prompt }],
+    // POST to Worker (non-streaming)
+    const res = await fetch(params.workerUrl.replace(/\/$/, ''), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model:      'claude-sonnet-4-20250514',
+        max_tokens: 1500,
+        messages:   [{ role: 'user', content: prompt }],
+      }),
     })
 
-    const text = res.content[0].type === 'text' ? res.content[0].text : ''
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(`Worker error ${res.status}: ${text}`)
+    }
+
+    const data = await res.json() as { content?: Array<{ type: string; text?: string }> }
+    const text = data.content?.[0]?.type === 'text' ? (data.content[0].text ?? '') : ''
     return JSON.parse(text) as GithubVerifyResult
   } catch (err) {
     return {
