@@ -54,14 +54,14 @@ Rules:
     setDraft('')
     reset()
 
-    await send(text, history)
+    // send() returns the full accumulated text — never stale
+    const reply = await send(text, history)
 
-    // After streaming, commit the assistant reply to history
     setHistory(prev => [
       ...prev,
       {
         role: 'assistant',
-        content: output || '',
+        content: reply,
         timestamp: new Date().toISOString(),
       },
     ])

@@ -17,8 +17,8 @@ export interface UseClaudeOptions {
 }
 
 export interface UseClaudeReturn {
-  /** Send a message and stream the response */
-  send(userMessage: string, history?: ClaudeMessage[]): Promise<void>
+  /** Send a message and stream the response. Returns the full response text. */
+  send(userMessage: string, history?: ClaudeMessage[]): Promise<string>
   /** Abort the current stream */
   abort(): void
   /** Accumulated streamed output */
@@ -43,10 +43,10 @@ export function useClaude(options: UseClaudeOptions = {}): UseClaudeReturn {
   const send = useCallback(async (
     userMessage: string,
     history: ClaudeMessage[] = [],
-  ) => {
+  ): Promise<string> => {
     if (!workerUrl) {
       setError('No Worker URL set. Go to Settings → AI Tutor and paste your Worker URL.')
-      return
+      return ''
     }
 
     // Abort any in-flight request
@@ -87,7 +87,8 @@ export function useClaude(options: UseClaudeOptions = {}): UseClaudeReturn {
       // ── Parse SSE stream ────────────────────────────────────────────────────
       const reader  = res.body.getReader()
       const decoder = new TextDecoder()
-      let buffer    = ''
+      let buffer      = ''
+      let accumulated = ''  // tracks full response so caller never reads stale state
 
       while (true) {
         const { done, value } = await reader.read()
@@ -110,15 +111,18 @@ export function useClaude(options: UseClaudeOptions = {}): UseClaudeReturn {
               event.delta?.type === 'text_delta' &&
               typeof event.delta?.text === 'string'
             ) {
-              setOutput(prev => prev + event.delta.text)
+              accumulated += event.delta.text
+              setOutput(accumulated)
             }
           } catch {
             // Skip malformed SSE chunks
           }
         }
       }
+
+      return accumulated
     } catch (err) {
-      if ((err as Error).name === 'AbortError') return
+      if ((err as Error).name === 'AbortError') return ''
       const msg = err instanceof Error ? err.message : 'Unexpected error'
       setError(
         msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('fetch')
@@ -127,6 +131,7 @@ export function useClaude(options: UseClaudeOptions = {}): UseClaudeReturn {
           ? 'Worker error — make sure ANTHROPIC_API_KEY is set as a Worker secret.'
           : `Error: ${msg}`,
       )
+      return ''
     } finally {
       setStreaming(false)
     }
