@@ -11,7 +11,7 @@ export interface Lesson {
   title: string
   content: string
   duration: number
-  keyTerms: KeyTerm[]
+  keyTerms: Array<string | KeyTerm>
 }
 
 export type QuestionType = 'multiple_choice' | 'short_answer' | 'practical'

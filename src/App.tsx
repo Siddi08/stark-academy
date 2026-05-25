@@ -1,21 +1,42 @@
-// Phase 0 scaffold — full app wired in Phase 2
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { AppShell } from '@/components/layout/AppShell'
+import HomeScreen       from '@/screens/Home'
+import CurriculumScreen from '@/screens/Curriculum'
+import ModuleScreen     from '@/screens/Module'
+import LessonScreen     from '@/screens/Lesson'
+import QuizScreen       from '@/screens/Quiz'
+import ProjectsScreen   from '@/screens/Projects'
+import ProgressScreen   from '@/screens/Progress'
+import SettingsScreen   from '@/screens/Settings'
+
 export default function App() {
   return (
-    <div className="min-h-screen bg-void flex items-center justify-center">
-      <div className="text-center animate-fade-in">
-        <div className="text-5xl mb-4">⚡</div>
-        <h1 className="font-heading text-3xl text-spark-400 tracking-wider mb-2">
-          STARK ACADEMY
-        </h1>
-        <p className="text-dim text-sm font-body">
-          Master the Anthropic ecosystem. Build like Iron Man.
-        </p>
-        <div className="mt-6 card px-6 py-3 inline-block">
-          <span className="text-ghost text-xs font-heading tracking-wide">
-            Phase 0 — Scaffold ✓
-          </span>
-        </div>
-      </div>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route index           element={<HomeScreen />} />
+          <Route path="curriculum" element={<CurriculumScreen />} />
+          <Route path="module/:id" element={<ModuleScreen />} />
+          <Route path="lesson/:id" element={<LessonScreen />} />
+          <Route path="quiz/:id"   element={<QuizScreen />} />
+          <Route path="projects"   element={<ProjectsScreen />} />
+          <Route path="progress"   element={<ProgressScreen />} />
+          <Route path="settings"   element={<SettingsScreen />} />
+          {/* 404 fallback */}
+          <Route
+            path="*"
+            element={
+              <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center">
+                  <p className="font-heading text-5xl font-bold text-border mb-4">404</p>
+                  <p className="text-dim">Page not found.</p>
+                  <a href="/" className="btn-ghost mt-4 inline-flex">Go home</a>
+                </div>
+              </div>
+            }
+          />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   )
 }
