@@ -6,6 +6,7 @@ import { MessageCircle, X, Send, Loader2, ChevronRight } from 'lucide-react'
 import 'highlight.js/styles/atom-one-dark.css'
 import { cn } from '@/utils/cn'
 import { useClaude } from '@/hooks/useClaude'
+import { useWorkerUrl } from '@/store/useAppStore'
 import type { Lesson, Module, ChatMessage } from '@/types'
 
 // ─── AI Tutor panel ───────────────────────────────────────────────────────────
@@ -20,6 +21,7 @@ function TutorPanel({ lesson, module, onClose }: TutorPanelProps) {
   const [history, setHistory] = useState<ChatMessage[]>([])
   const [draft, setDraft] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
+  const workerUrl = useWorkerUrl()
 
   const systemPrompt = `You are an AI tutor for Stark Academy.
 The student is reading Lesson ${lesson.number}: "${lesson.title}" (Module ${module.number}: "${module.title}").
@@ -57,15 +59,19 @@ Rules:
     // send() returns the full accumulated text — never stale
     const reply = await send(text, history)
 
-    setHistory(prev => [
-      ...prev,
-      {
-        role: 'assistant',
-        content: reply,
-        timestamp: new Date().toISOString(),
-      },
-    ])
-    reset()
+    // Only add to history if we got a reply — keeps the error visible if send() failed
+    if (reply) {
+      setHistory(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: reply,
+          timestamp: new Date().toISOString(),
+        },
+      ])
+      reset()
+    }
+    // If reply is empty, leave the error message visible so the user can see it
   }
 
   // While waiting for response, show a typing placeholder
@@ -91,6 +97,12 @@ Rules:
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        {!workerUrl && (
+          <div className="mx-2 mt-2 px-3 py-2.5 rounded-xl bg-fail/10 border border-fail/20 text-xs text-fail leading-relaxed">
+            No Worker URL set. Go to <strong>Settings → AI Tutor</strong> and paste your Cloudflare Worker URL.
+          </div>
+        )}
+
         {displayHistory.length === 0 && (
           <div className="text-center py-8">
             <p className="text-dim text-sm">Ask anything about this lesson.</p>
