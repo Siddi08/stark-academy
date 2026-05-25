@@ -17,13 +17,13 @@ export interface UseClaudeOptions {
 }
 
 export interface UseClaudeReturn {
-  /** Send a message and stream the response. Returns the full response text. */
+  /** Send a message and return the full response text */
   send(userMessage: string, history?: ClaudeMessage[]): Promise<string>
-  /** Abort the current stream */
+  /** Abort the current request */
   abort(): void
-  /** Accumulated streamed output */
+  /** Response text (set once complete) */
   output: string
-  /** True while streaming */
+  /** True while waiting for response */
   streaming: boolean
   /** Error string if the last call failed */
   error: string | null
@@ -49,7 +49,6 @@ export function useClaude(options: UseClaudeOptions = {}): UseClaudeReturn {
       return ''
     }
 
-    // Abort any in-flight request
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
@@ -65,12 +64,11 @@ export function useClaude(options: UseClaudeOptions = {}): UseClaudeReturn {
       ]
 
       const res = await fetch(workerUrl.replace(/\/$/, ''), {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model:      options.model ?? 'claude-sonnet-4-20250514',
           max_tokens: options.maxTokens ?? 2048,
-          stream:     true,
           ...(options.system ? { system: options.system } : {}),
           messages,
         }),
@@ -82,50 +80,18 @@ export function useClaude(options: UseClaudeOptions = {}): UseClaudeReturn {
         throw new Error(`Worker returned ${res.status}: ${text}`)
       }
 
-      if (!res.body) throw new Error('Empty response body from Worker')
-
-      // ── Parse SSE stream ────────────────────────────────────────────────────
-      const reader  = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer      = ''
-      let accumulated = ''  // tracks full response so caller never reads stale state
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done || controller.signal.aborted) break
-
-        buffer += decoder.decode(value, { stream: true })
-
-        // SSE is newline-delimited; keep the last (possibly incomplete) line
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const payload = line.slice(6).trim()
-          if (payload === '[DONE]') continue
-          try {
-            const event = JSON.parse(payload)
-            if (
-              event.type === 'content_block_delta' &&
-              event.delta?.type === 'text_delta' &&
-              typeof event.delta?.text === 'string'
-            ) {
-              accumulated += event.delta.text
-              setOutput(accumulated)
-            }
-          } catch {
-            // Skip malformed SSE chunks
-          }
-        }
+      const data = await res.json() as {
+        content?: Array<{ type: string; text?: string }>
       }
 
-      return accumulated
+      const text = data.content?.find(b => b.type === 'text')?.text ?? ''
+      setOutput(text)
+      return text
     } catch (err) {
       if ((err as Error).name === 'AbortError') return ''
       const msg = err instanceof Error ? err.message : 'Unexpected error'
       setError(
-        msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('fetch')
+        msg.includes('Failed to fetch') || msg.includes('NetworkError')
           ? 'Cannot reach the AI Tutor Worker. Check your Worker URL in Settings.'
           : msg.includes('Worker returned 5')
           ? 'Worker error — make sure ANTHROPIC_API_KEY is set as a Worker secret.'

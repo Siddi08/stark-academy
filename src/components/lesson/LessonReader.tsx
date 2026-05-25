@@ -68,9 +68,9 @@ Rules:
     reset()
   }
 
-  // Keep output current in history during streaming
+  // While waiting for response, show a typing placeholder
   const displayHistory = streaming
-    ? [...history, { role: 'assistant' as const, content: output, timestamp: '' }]
+    ? [...history, { role: 'assistant' as const, content: '…', timestamp: '' }]
     : history
 
   return (
