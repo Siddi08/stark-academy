@@ -25,22 +25,20 @@ export default function SettingsScreen() {
 
   const { sync, isSyncing } = useSync()
 
-  const [localWorkerUrl, setLocalWorkerUrl] = useState(workerUrl)
   const [testingWorker, setTestingWorker] = useState(false)
-  const [workerOk, setWorkerOk] = useState<boolean | null>(null)
-  const [localName, setLocalName] = useState(progress.userName)
+  const [workerOk, setWorkerOk]           = useState<boolean | null>(null)
+  const [localName, setLocalName]         = useState(progress.userName)
 
   async function handleTestWorker() {
-    const url = localWorkerUrl.trim()
-    if (!url) return
+    if (!workerUrl.trim()) return
     setTestingWorker(true)
     setWorkerOk(null)
     try {
-      const ok = await pingWorker(url)
+      const ok = await pingWorker(workerUrl.trim())
       setWorkerOk(ok)
       addToast({
         variant: ok ? 'success' : 'error',
-        title:   ok ? 'Worker reachable' : 'Worker unreachable',
+        title:   ok ? 'Worker reachable ✓' : 'Worker unreachable',
         body:    ok
           ? 'AI Tutor is ready to use.'
           : 'Could not reach the Worker. Check the URL and make sure it is deployed.',
@@ -48,11 +46,6 @@ export default function SettingsScreen() {
     } finally {
       setTestingWorker(false)
     }
-  }
-
-  function handleSaveWorkerUrl() {
-    setWorkerUrl(localWorkerUrl.trim())
-    addToast({ variant: 'success', title: 'Worker URL saved' })
   }
 
   function handleSaveName() {
@@ -123,15 +116,15 @@ export default function SettingsScreen() {
         <div className="flex gap-2">
           <input
             className="input flex-1 font-mono text-sm"
-            value={localWorkerUrl}
-            onChange={e => { setLocalWorkerUrl(e.target.value); setWorkerOk(null) }}
+            value={workerUrl}
+            onChange={e => { setWorkerUrl(e.target.value); setWorkerOk(null) }}
             placeholder="https://stark-proxy.your-name.workers.dev"
             type="url"
             autoComplete="off"
           />
           <button
             onClick={handleTestWorker}
-            disabled={!localWorkerUrl.trim() || testingWorker}
+            disabled={!workerUrl.trim() || testingWorker}
             className={cn(
               'btn-secondary px-4 shrink-0',
               workerOk === true  && 'border-ok/30 text-ok',
@@ -145,10 +138,10 @@ export default function SettingsScreen() {
               : 'Test'}
           </button>
         </div>
-        {localWorkerUrl.trim() !== workerUrl && (
-          <button onClick={handleSaveWorkerUrl} className="btn-primary w-full">
-            Save Worker URL
-          </button>
+        {workerUrl.trim() && (
+          <p className="text-xs text-ghost">
+            Saved — AI Tutor will use this URL.
+          </p>
         )}
       </section>
 
