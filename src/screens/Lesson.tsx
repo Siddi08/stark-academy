@@ -2,16 +2,17 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { allModules } from '@/data/curriculum'
 import { useAppStore } from '@/store/useAppStore'
+import { useShallow } from 'zustand/react/shallow'
 import { LessonReader } from '@/components/lesson/LessonReader'
 
 export default function LessonScreen() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
 
-  const { completeLesson, progress } = useAppStore(s => ({
+  const { completeLesson, progress } = useAppStore(useShallow(s => ({
     completeLesson: s.completeLesson,
     progress: s.progress,
-  }))
+  })))
 
   // Find lesson + module
   let found: {

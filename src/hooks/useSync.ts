@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store/useAppStore'
+import { useShallow } from 'zustand/react/shallow'
 import { mergeProgress } from '@/utils/sync'
 
 // ─── useSync ──────────────────────────────────────────────────────────────────
@@ -18,13 +19,13 @@ export interface UseSyncReturn {
 
 export function useSync(): UseSyncReturn {
   const { progress, syncServerUrl, syncStatus, updateSyncStatus, applySync } =
-    useAppStore(s => ({
+    useAppStore(useShallow(s => ({
       progress:         s.progress,
       syncServerUrl:    s.syncServerUrl,
       syncStatus:       s.syncStatus,
       updateSyncStatus: s.updateSyncStatus,
       applySync:        s.applySync,
-    }))
+    })))
 
   const sync = useCallback(async () => {
     if (!syncServerUrl) {

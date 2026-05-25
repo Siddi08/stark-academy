@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { CheckCircle, XCircle, Trophy, Copy, Download, FileText } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { useAppStore } from '@/store/useAppStore'
+import { useShallow } from 'zustand/react/shallow'
 import type { Quiz, QuizQuestion, ClaudeGradingResult } from '@/types'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -322,10 +323,10 @@ export function QuizEngine({ quiz, moduleTitle, onComplete, onBack }: QuizEngine
   const [exportText, setExportText] = useState('')
   const [result, setResult] = useState<ClaudeGradingResult | null>(null)
 
-  const { recordQuizAttempt, progress } = useAppStore(s => ({
+  const { recordQuizAttempt, progress } = useAppStore(useShallow(s => ({
     recordQuizAttempt: s.recordQuizAttempt,
     progress: s.progress,
-  }))
+  })))
 
   const hasSA = quiz.questions.some(q => q.type === 'short_answer')
   const answeredCount = quiz.questions.filter(q => answers[q.id]?.trim()).length

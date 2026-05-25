@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Eye, EyeOff, Check, Loader2 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { useAppStore } from '@/store/useAppStore'
+import { useShallow } from 'zustand/react/shallow'
 import { testApiKey } from '@/api/anthropic'
 import { exportSave, importSave, clearSave } from '@/utils/save'
 import { useSync } from '@/hooks/useSync'
@@ -13,14 +14,14 @@ export default function SettingsScreen() {
     githubToken, setGithubToken,
     progress, setUserName,
     addToast,
-  } = useAppStore(s => ({
+  } = useAppStore(useShallow(s => ({
     apiKey: s.apiKey,           setApiKey: s.setApiKey,
     syncServerUrl: s.syncServerUrl, setSyncServerUrl: s.setSyncServerUrl,
     githubToken: s.githubToken,     setGithubToken: s.setGithubToken,
     progress: s.progress,
     setUserName: s.setUserName,
     addToast: s.addToast,
-  }))
+  })))
 
   const { sync, isSyncing } = useSync()
 

@@ -3,6 +3,7 @@ import { ExternalLink, GitFork, CheckCircle, Loader2, ChevronDown, ChevronUp } f
 import { cn } from '@/utils/cn'
 import { allModules } from '@/data/curriculum'
 import { useAppStore, useProgress } from '@/store/useAppStore'
+import { useShallow } from 'zustand/react/shallow'
 import { verifyRepo } from '@/api/github'
 import { Badge } from '@/components/ui/Badge'
 import type { GithubVerifyResult, Project } from '@/types'
@@ -36,16 +37,16 @@ function ProjectCard({ project, moduleTitle, moduleNumber }: ProjectCardProps) {
   const [verifying, setVerifying] = useState(false)
   const [verifyResult, setVerifyResult] = useState<GithubVerifyResult | null>(null)
 
-  const { apiKey, githubToken } = useAppStore(s => ({
+  const { apiKey, githubToken } = useAppStore(useShallow(s => ({
     apiKey: s.apiKey,
     githubToken: s.githubToken,
-  }))
-  const { updateProjectStatus, setProjectRepo, progress, addToast } = useAppStore(s => ({
+  })))
+  const { updateProjectStatus, setProjectRepo, progress, addToast } = useAppStore(useShallow(s => ({
     updateProjectStatus: s.updateProjectStatus,
     setProjectRepo: s.setProjectRepo,
     progress: s.progress,
     addToast: s.addToast,
-  }))
+  })))
 
   const status = progress.projectStatuses[project.id] ?? 'not_started'
   const savedRepo = progress.projectRepos[project.id] ?? ''
