@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
-import Anthropic from '@anthropic-ai/sdk'
 import { useApiKey } from '@/store/useAppStore'
+
+type MessageParam = { role: 'user' | 'assistant'; content: string }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,9 +59,10 @@ export function useClaude(options: UseClaudeOptions = {}): UseClaudeReturn {
     setError(null)
 
     try {
+      const { default: Anthropic } = await import('@anthropic-ai/sdk')
       const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true })
 
-      const messages: Anthropic.MessageParam[] = [
+      const messages: MessageParam[] = [
         ...history.map(m => ({ role: m.role, content: m.content })),
         { role: 'user', content: userMessage },
       ]
