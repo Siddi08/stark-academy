@@ -190,10 +190,10 @@ export function LessonReader({ lesson, module, isCompleted, onComplete }: Lesson
   const termStrings = lesson.keyTerms.map(t => typeof t === 'string' ? t : t.term)
 
   return (
-    <div className="relative flex h-full">
+    <div className="relative flex">
       {/* ── Lesson content ── */}
       <div className={cn(
-        'flex-1 min-w-0 overflow-y-auto transition-all duration-300',
+        'flex-1 min-w-0 transition-all duration-300',
         tutorOpen ? 'lg:mr-[360px]' : '',
       )}>
         <article className="max-w-3xl mx-auto px-4 py-8">
@@ -262,7 +262,7 @@ export function LessonReader({ lesson, module, isCompleted, onComplete }: Lesson
 
       {/* ── Tutor panel (desktop: fixed right panel) ── */}
       <div className={cn(
-        'hidden lg:flex flex-col fixed right-0 top-0 bottom-0 w-[360px]',
+        'hidden lg:flex flex-col fixed right-0 top-[57px] bottom-0 w-[360px]',
         'transition-transform duration-300 z-10',
         tutorOpen ? 'translate-x-0' : 'translate-x-full',
       )}>

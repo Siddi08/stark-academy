@@ -94,8 +94,8 @@ export default function LessonScreen() {
         </div>
       </div>
 
-      {/* Full-height reader */}
-      <div className="flex-1">
+      {/* Lesson reader — content flows at natural height, page scrolls */}
+      <div>
         <LessonReader
           lesson={lesson}
           module={module}
@@ -104,8 +104,8 @@ export default function LessonScreen() {
         />
       </div>
 
-      {/* Bottom navigation bar */}
-      <div className="border-t border-border bg-void/90 backdrop-blur-md px-4 py-3">
+      {/* Bottom navigation bar — sticky so it stays visible while scrolling */}
+      <div className="sticky bottom-20 lg:bottom-0 z-10 border-t border-border bg-void/90 backdrop-blur-md px-4 py-3">
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
           {/* Previous */}
           {prevLesson ? (
