@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { allModules } from '@/data/curriculum'
@@ -40,6 +41,14 @@ export default function LessonScreen() {
 
   const { lesson, module, lessonIndex } = found
   const isCompleted = progress.completedLessons.includes(lesson.id)
+
+  // ── Show bottom nav only once the student scrolls to the end of the lesson ──
+  // Starts visible if the lesson is already completed so they can always navigate.
+  const [reachedEnd, setReachedEnd] = useState(isCompleted)
+  useEffect(() => {
+    // Reset when navigating to a different lesson
+    setReachedEnd(progress.completedLessons.includes(lesson.id))
+  }, [lesson.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Adjacent navigation
   const prevLesson = lessonIndex > 0 ? module.lessons[lessonIndex - 1] : null
@@ -102,10 +111,13 @@ export default function LessonScreen() {
           module={module}
           isCompleted={isCompleted}
           onComplete={handleComplete}
+          onReachEnd={() => setReachedEnd(true)}
+          navVisible={reachedEnd}
         />
       </div>
 
-      {/* Bottom navigation bar — sticky so it stays visible while scrolling */}
+      {/* Bottom nav — only appears once the student scrolls to the complete button */}
+      {reachedEnd && (
       <div className="sticky bottom-20 lg:bottom-0 z-10 border-t border-border bg-void/90 backdrop-blur-md px-4 py-3">
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
           {/* Previous */}
@@ -149,6 +161,7 @@ export default function LessonScreen() {
           )}
         </div>
       </div>
+      )}
     </div>
   )
 }

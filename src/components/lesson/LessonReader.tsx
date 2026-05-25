@@ -183,11 +183,40 @@ interface LessonReaderProps {
   module: Module
   isCompleted: boolean
   onComplete: () => void
+  /** Called once when the bottom of the lesson content enters the viewport */
+  onReachEnd?: () => void
+  /** True when the sticky bottom nav bar is visible — moves the tutor button up */
+  navVisible?: boolean
 }
 
-export function LessonReader({ lesson, module, isCompleted, onComplete }: LessonReaderProps) {
+export function LessonReader({
+  lesson, module, isCompleted, onComplete, onReachEnd, navVisible = false,
+}: LessonReaderProps) {
   const [tutorOpen, setTutorOpen] = useState(false)
   const termStrings = lesson.keyTerms.map(t => typeof t === 'string' ? t : t.term)
+  const endRef = useRef<HTMLDivElement>(null)
+
+  // Keep a stable ref to the callback so the IntersectionObserver doesn't need
+  // to be recreated every render.
+  const onReachEndRef = useRef(onReachEnd)
+  useEffect(() => { onReachEndRef.current = onReachEnd })
+
+  // Watch the "Mark as Complete" button; fire onReachEnd once it enters viewport
+  useEffect(() => {
+    const el = endRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          onReachEndRef.current?.()
+          observer.disconnect()
+        }
+      },
+      { threshold: 0.5 },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [lesson.id])  // recreate when navigating to a new lesson
 
   return (
     <div className="relative flex">
@@ -238,8 +267,8 @@ export function LessonReader({ lesson, module, isCompleted, onComplete }: Lesson
             </div>
           )}
 
-          {/* Complete button */}
-          <div className="mt-10 pb-8">
+          {/* Complete button — observed by IntersectionObserver */}
+          <div ref={endRef} className="mt-10 pb-8">
             <button
               onClick={onComplete}
               disabled={isCompleted}
@@ -282,11 +311,13 @@ export function LessonReader({ lesson, module, isCompleted, onComplete }: Lesson
       )}
 
       {/* ── Floating tutor button ── */}
+      {/* Shifts up when the sticky bottom nav becomes visible to avoid overlap  */}
       {!tutorOpen && (
         <button
           onClick={() => setTutorOpen(true)}
           className={cn(
-            'fixed bottom-24 lg:bottom-8 right-4 z-20',
+            'fixed right-4 z-20 transition-all duration-300',
+            navVisible ? 'bottom-40 lg:bottom-24' : 'bottom-24 lg:bottom-8',
             'btn-primary rounded-full w-14 h-14 shadow-lg',
             'flex items-center justify-center',
             'shadow-[0_0_20px_-4px_rgba(84,86,245,0.7)]',
