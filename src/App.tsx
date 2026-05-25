@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { HashRouter, Routes, Route, Link } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
 import HomeScreen       from '@/screens/Home'
 import CurriculumScreen from '@/screens/Curriculum'
@@ -11,7 +11,7 @@ import SettingsScreen   from '@/screens/Settings'
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         <Route element={<AppShell />}>
           <Route index           element={<HomeScreen />} />
@@ -28,15 +28,15 @@ export default function App() {
             element={
               <div className="flex items-center justify-center min-h-screen">
                 <div className="text-center">
-                  <p className="font-heading text-5xl font-bold text-border mb-4">404</p>
+                  <p className="font-heading text-5xl font-bold text-spark-500 mb-4">404</p>
                   <p className="text-dim">Page not found.</p>
-                  <a href="/" className="btn-ghost mt-4 inline-flex">Go home</a>
+                  <Link to="/" className="btn-ghost mt-4 inline-flex">Go home</Link>
                 </div>
               </div>
             }
           />
         </Route>
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   )
 }
