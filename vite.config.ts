@@ -35,8 +35,8 @@ export default defineConfig({
         theme_color: '#5456F5',
         background_color: '#070709',
         display: 'standalone',
-        start_url: '/',
-        scope: '/',
+        start_url: '/stark-academy/',
+        scope: '/stark-academy/',
         orientation: 'any',
         icons: [
           {

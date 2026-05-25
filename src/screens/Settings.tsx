@@ -93,9 +93,14 @@ export default function SettingsScreen() {
 
       {/* ── Anthropic API Key ── */}
       <section className="card p-5 space-y-4">
-        <h2 className="font-heading text-sm uppercase tracking-widest text-dim">Anthropic API Key</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="font-heading text-sm uppercase tracking-widest text-dim">Anthropic API Key</h2>
+          <span className="font-mono text-[10px] text-ghost border border-border rounded px-1.5 py-0.5">optional</span>
+        </div>
         <p className="text-xs text-ghost">
-          Required for AI tutoring, quiz grading, and insights. Get your key from{' '}
+          Enables the AI Tutor panel inside lessons. Quizzes work without it — you download your answers as a text file and paste them into{' '}
+          <a href="https://claude.ai" target="_blank" rel="noreferrer" className="text-spark-300 underline">claude.ai</a>{' '}
+          to get a grade. Get an API key from{' '}
           <a href="https://console.anthropic.com" target="_blank" rel="noreferrer" className="text-spark-300 underline">
             console.anthropic.com
           </a>
@@ -138,10 +143,12 @@ export default function SettingsScreen() {
 
       {/* ── LAN Sync ── */}
       <section className="card p-5 space-y-4">
-        <h2 className="font-heading text-sm uppercase tracking-widest text-dim">LAN Sync</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="font-heading text-sm uppercase tracking-widest text-dim">LAN Sync</h2>
+          <span className="font-mono text-[10px] text-ghost border border-border rounded px-1.5 py-0.5">optional</span>
+        </div>
         <p className="text-xs text-ghost">
-          Run <code className="font-mono text-spark-300">npm run sync-server</code> on your laptop,
-          then enter its local IP address below.
+          Sync progress between your devices over Wi-Fi. Start the sync server on one device (see the repo's README), then enter its local IP address below on your other devices.
         </p>
         <div className="flex gap-2">
           <input
