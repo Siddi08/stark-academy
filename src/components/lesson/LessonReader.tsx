@@ -96,7 +96,7 @@ Rules:
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4">
         {!workerUrl && (
           <div className="mx-2 mt-2 px-3 py-2.5 rounded-xl bg-fail/10 border border-fail/20 text-xs text-fail leading-relaxed">
             No Worker URL set. Go to <strong>Settings → AI Tutor</strong> and paste your Cloudflare Worker URL.
