@@ -8,6 +8,7 @@ import QuizScreen       from '@/screens/Quiz'
 import ProjectsScreen   from '@/screens/Projects'
 import ProgressScreen   from '@/screens/Progress'
 import SettingsScreen   from '@/screens/Settings'
+import AIAdvisorScreen  from '@/screens/AIAdvisor'
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="projects"   element={<ProjectsScreen />} />
           <Route path="progress"   element={<ProgressScreen />} />
           <Route path="settings"   element={<SettingsScreen />} />
+          <Route path="ai"         element={<AIAdvisorScreen />} />
           {/* 404 fallback */}
           <Route
             path="*"
