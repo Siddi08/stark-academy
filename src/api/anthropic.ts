@@ -1,7 +1,9 @@
+import Anthropic from '@anthropic-ai/sdk'
 import type { ClaudeGradingResult, QuizQuestion } from '@/types'
 
 export interface GradeQuizParams {
-  workerUrl: string
+  workerUrl?: string
+  apiKey?: string
   moduleTitle: string
   questions: QuizQuestion[]
   answers: Record<string, string>
@@ -9,21 +11,23 @@ export interface GradeQuizParams {
 }
 
 export interface ExplainConceptParams {
-  workerUrl: string
+  workerUrl?: string
+  apiKey?: string
   lessonTitle: string
   concept: string
   lessonContent: string
 }
 
 export interface ChatInLessonParams {
-  workerUrl: string
+  workerUrl?: string
+  apiKey?: string
   lessonTitle: string
   lessonContent: string
   history: { role: 'user' | 'assistant'; content: string }[]
   userMessage: string
 }
 
-// ─── Internal helper ──────────────────────────────────────────────────────────
+// ─── Internal helpers ─────────────────────────────────────────────────────────
 
 /** POST a messages request to the Worker (non-streaming) and return the text. */
 async function workerPost(workerUrl: string, body: object): Promise<string> {
@@ -40,20 +44,37 @@ async function workerPost(workerUrl: string, body: object): Promise<string> {
   return data.content?.[0]?.type === 'text' ? (data.content[0].text ?? '') : ''
 }
 
+/** Call the Anthropic API directly from the browser using the user's API key. */
+async function directPost(apiKey: string, body: { model: string; max_tokens: number; messages: { role: 'user' | 'assistant'; content: string }[]; system?: string }): Promise<string> {
+  const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true })
+  const msg = await client.messages.create(body)
+  return msg.content[0]?.type === 'text' ? msg.content[0].text : ''
+}
+
+function resolvePost(params: { workerUrl?: string; apiKey?: string }) {
+  if (params.workerUrl?.trim()) return (body: object) => workerPost(params.workerUrl!, body)
+  if (params.apiKey?.trim()) return (body: Parameters<typeof directPost>[1]) => directPost(params.apiKey!, body)
+  throw new Error('No API configured — add an API key or Worker URL in Settings.')
+}
+
 // ─── Exported helpers ─────────────────────────────────────────────────────────
 
 const conceptCache = new Map<string, string>()
 
 export async function gradeQuiz(params: GradeQuizParams): Promise<ClaudeGradingResult> {
+  const post = resolvePost(params)
+
+  const totalXp = params.questions.reduce((sum, q) => sum + q.xpValue, 0)
   const questionsText = params.questions.map((q, i) => {
     const answer = params.answers[q.id] ?? '(no answer)'
-    return `Q${i + 1} [${q.type}] (${q.xpValue} XP): ${q.question}\nAnswer: ${answer}\nRubric: ${q.gradingRubric}`
+    return `Q${i + 1} [${q.id}] [${q.type}] (${q.xpValue} XP): ${q.question}\nAnswer: ${answer}\nRubric: ${q.gradingRubric}`
   }).join('\n\n')
 
   const prompt = `You are grading a quiz for Stark Academy, an AI curriculum.
 
 Module: ${params.moduleTitle}
 Pass mark: ${params.passMark}/100
+Total possible XP: ${totalXp}
 
 Questions and student answers:
 ${questionsText}
@@ -63,16 +84,16 @@ CRITICAL: your response must be ONLY a valid JSON object. Absolutely no markdown
 Return this exact shape:
 {
   "totalScore": <number 0-100>,
-  "passed": <boolean>,
+  "passed": <boolean based on whether totalScore >= ${params.passMark}>,
   "overallFeedback": "<2-3 sentence summary>",
   "questionFeedback": {
     "<questionId>": "<specific feedback for this question>"
   },
-  "xpAwarded": <number>
+  "xpAwarded": <number between 0 and ${totalXp}>
 }`
 
   async function call(): Promise<string> {
-    return workerPost(params.workerUrl, {
+    return post({
       model:      'claude-sonnet-4-20250514',
       max_tokens: 1500,
       messages:   [{ role: 'user', content: prompt }],
@@ -96,7 +117,8 @@ export async function explainConcept(params: ExplainConceptParams): Promise<stri
   const cacheKey = `${params.lessonTitle}::${params.concept}`
   if (conceptCache.has(cacheKey)) return conceptCache.get(cacheKey)!
 
-  const text = await workerPost(params.workerUrl, {
+  const post = resolvePost(params)
+  const text = await post({
     model:      'claude-sonnet-4-20250514',
     max_tokens: 800,
     messages:   [{
@@ -117,7 +139,8 @@ Give a clear explanation in 2-4 paragraphs. Use examples where helpful.`,
 }
 
 export async function chatInLesson(params: ChatInLessonParams): Promise<string> {
-  return workerPost(params.workerUrl, {
+  const post = resolvePost(params)
+  return post({
     model:      'claude-sonnet-4-20250514',
     max_tokens: 1000,
     system:     `You are a knowledgeable, encouraging tutor for Stark Academy — an AI curriculum.

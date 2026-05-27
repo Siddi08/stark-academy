@@ -1,96 +1,12 @@
 import { useState } from 'react'
-import { CheckCircle, XCircle, Trophy, Copy, Download, FileText } from 'lucide-react'
+import { XCircle, Trophy, Loader2, AlertTriangle } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { useAppStore } from '@/store/useAppStore'
 import { useShallow } from 'zustand/react/shallow'
+import { gradeQuiz } from '@/api/anthropic'
 import type { Quiz, QuizQuestion, ClaudeGradingResult } from '@/types'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function buildExportText(
-  quiz: Quiz,
-  moduleTitle: string,
-  answers: Record<string, string>,
-): string {
-  const date = new Date().toLocaleDateString('en-AU', {
-    day: 'numeric', month: 'long', year: 'numeric',
-  })
-  const sep = '─'.repeat(52)
-  const lines: string[] = [
-    `=== STARK ACADEMY — QUIZ GRADING REQUEST ===`,
-    ``,
-    `Module:     ${moduleTitle}`,
-    `Quiz:       ${quiz.title}`,
-    `Date:       ${date}`,
-    `Pass mark:  ${quiz.passMark}%`,
-    ``,
-    `Please grade my answers below. Respond with:`,
-    `  • An overall score from 0–100 (weight by XP values shown)`,
-    `  • Pass or Fail (pass mark is ${quiz.passMark}%)`,
-    `  • One-line feedback per question`,
-    ``,
-    sep,
-  ]
-
-  quiz.questions.forEach((q, i) => {
-    const typeLabel = q.type === 'multiple_choice' ? 'Multiple Choice' : 'Short Answer'
-    lines.push(``, `QUESTION ${i + 1} — ${typeLabel} [${q.xpValue} XP]`, ``)
-    lines.push(q.question, ``)
-
-    if (q.type === 'multiple_choice' && q.options) {
-      q.options.forEach((opt, idx) => {
-        lines.push(`  ${String.fromCharCode(65 + idx)}) ${opt}`)
-      })
-      lines.push(``)
-      lines.push(`My answer:      ${answers[q.id] || '(no answer)'}`)
-      if (q.correctAnswer) {
-        lines.push(`Correct answer: ${q.correctAnswer}`)
-      }
-    } else {
-      lines.push(`Grading rubric: ${q.gradingRubric}`, ``)
-      lines.push(`My answer:`)
-      lines.push(answers[q.id]?.trim() || '(no answer)')
-    }
-
-    lines.push(``, sep)
-  })
-
-  return lines.join('\n')
-}
-
-/** Grade only multiple-choice questions — instant, no API needed */
-function gradeMC(quiz: Quiz, answers: Record<string, string>) {
-  const mcQs = quiz.questions.filter(q => q.type === 'multiple_choice')
-  if (mcQs.length === 0) return { score: 0, xp: 0, feedback: {} as Record<string, string> }
-
-  let correct = 0
-  let xp = 0
-  const feedback: Record<string, string> = {}
-
-  for (const q of mcQs) {
-    const ok = !!q.correctAnswer && answers[q.id] === q.correctAnswer
-    if (ok) { correct++; xp += q.xpValue }
-    feedback[q.id] = ok
-      ? '✓ Correct'
-      : `✗ Incorrect — correct answer: ${q.correctAnswer ?? 'see rubric'}`
-  }
-
-  return {
-    score: Math.round((correct / mcQs.length) * 100),
-    xp,
-    feedback,
-  }
-}
-
-function downloadText(text: string, filename: string) {
-  const blob = new Blob([text], { type: 'text/plain' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
-}
 
 // ─── QuestionItem ─────────────────────────────────────────────────────────────
 
@@ -212,98 +128,6 @@ function ResultsBanner({ result, quiz, onRetry, onContinue }: ResultsBannerProps
   )
 }
 
-// ─── Export panel ─────────────────────────────────────────────────────────────
-
-function ExportPanel({ text, filename }: { text: string; filename: string }) {
-  const [copied, setCopied] = useState(false)
-
-  async function handleCopy() {
-    await navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2500)
-  }
-
-  return (
-    <div className="card p-5 space-y-4 border-spark-500/20">
-      <div className="flex items-center gap-2">
-        <FileText size={16} className="text-spark-400" />
-        <h3 className="font-heading text-sm font-bold text-ink">Grade with AI</h3>
-      </div>
-      <p className="text-xs text-dim leading-relaxed">
-        Copy or download your quiz answers, paste into{' '}
-        <a href="https://claude.ai" target="_blank" rel="noreferrer" className="text-spark-300 underline">
-          claude.ai
-        </a>{' '}
-        (or any AI chat), then enter the score you receive below.
-      </p>
-      <pre className="bg-raised border border-border rounded-xl p-4 text-xs text-ghost font-mono overflow-auto max-h-40 whitespace-pre-wrap leading-relaxed">
-        {text.slice(0, 400)}{text.length > 400 ? '\n…' : ''}
-      </pre>
-      <div className="flex gap-2">
-        <button onClick={handleCopy} className="btn-secondary flex-1 gap-2 min-h-[44px]">
-          {copied
-            ? <><CheckCircle size={14} className="text-ok" /> Copied!</>
-            : <><Copy size={14} /> Copy to clipboard</>}
-        </button>
-        <button
-          onClick={() => downloadText(text, filename)}
-          className="btn-ghost gap-2 min-h-[44px]"
-        >
-          <Download size={14} /> .txt
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ─── Score entry ──────────────────────────────────────────────────────────────
-
-function ScoreEntry({
-  defaultScore,
-  hasSA,
-  onRecord,
-}: {
-  defaultScore: number
-  hasSA: boolean
-  onRecord: (score: number) => void
-}) {
-  const [scoreStr, setScoreStr] = useState(hasSA ? '' : String(defaultScore))
-  const parsed = parseInt(scoreStr, 10)
-  const valid = !isNaN(parsed) && parsed >= 0 && parsed <= 100
-
-  return (
-    <div className="card p-5 space-y-4">
-      <h3 className="font-heading text-sm font-bold text-ink">
-        {hasSA ? 'Enter your AI-graded score' : 'Your score'}
-      </h3>
-      {hasSA && (
-        <p className="text-xs text-dim">
-          After pasting your answers into an AI chat and receiving a grade, enter the overall score (0–100) here.
-        </p>
-      )}
-      <div className="flex items-center gap-3">
-        <input
-          type="number"
-          min={0}
-          max={100}
-          value={scoreStr}
-          onChange={e => setScoreStr(e.target.value)}
-          readOnly={!hasSA}
-          className={cn('input w-24 text-center text-lg font-mono', !hasSA && 'opacity-70')}
-          placeholder="0–100"
-        />
-        <span className="text-dim text-sm">/ 100</span>
-        <button
-          onClick={() => valid && onRecord(parsed)}
-          disabled={!valid}
-          className="btn-primary ml-auto min-h-[44px] px-6"
-        >
-          Record Result
-        </button>
-      </div>
-    </div>
-  )
-}
 
 // ─── QuizEngine ───────────────────────────────────────────────────────────────
 
@@ -314,21 +138,21 @@ interface QuizEngineProps {
   onBack: () => void
 }
 
-type Phase = 'answering' | 'submitted' | 'recorded'
+type Phase = 'answering' | 'grading' | 'recorded'
 
 export function QuizEngine({ quiz, moduleTitle, onComplete, onBack }: QuizEngineProps) {
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [phase, setPhase] = useState<Phase>('answering')
-  const [mcResult, setMcResult] = useState<ReturnType<typeof gradeMC> | null>(null)
-  const [exportText, setExportText] = useState('')
   const [result, setResult] = useState<ClaudeGradingResult | null>(null)
+  const [gradingError, setGradingError] = useState<string | null>(null)
 
-  const { recordQuizAttempt, progress } = useAppStore(useShallow(s => ({
+  const { recordQuizAttempt, progress, workerUrl, apiKey } = useAppStore(useShallow(s => ({
     recordQuizAttempt: s.recordQuizAttempt,
     progress: s.progress,
+    workerUrl: s.workerUrl,
+    apiKey: s.apiKey,
   })))
 
-  const hasSA = quiz.questions.some(q => q.type === 'short_answer')
   const answeredCount = quiz.questions.filter(q => answers[q.id]?.trim()).length
   const allAnswered = answeredCount === quiz.questions.length
 
@@ -336,73 +160,47 @@ export function QuizEngine({ quiz, moduleTitle, onComplete, onBack }: QuizEngine
     setAnswers(prev => ({ ...prev, [questionId]: value }))
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!allAnswered) return
-    const mc = gradeMC(quiz, answers)
-    const text = buildExportText(quiz, moduleTitle, answers)
-    setMcResult(mc)
-    setExportText(text)
-    setPhase('submitted')
-  }
-
-  function handleRecord(score: number) {
-    const passed = score >= quiz.passMark
-
-    // XP: full on pass, half on fail — use MC xp if available, else estimate from score
-    const totalXp = quiz.questions.reduce((sum, q) => sum + q.xpValue, 0)
-    const xpAwarded = passed
-      ? Math.round(totalXp * (score / 100))
-      : Math.round(totalXp * (score / 100) * 0.5)
-
-    // Merge MC feedback with placeholder for SA
-    const questionFeedback: Record<string, string> = { ...(mcResult?.feedback ?? {}) }
-    for (const q of quiz.questions) {
-      if (q.type === 'short_answer' && !questionFeedback[q.id]) {
-        questionFeedback[q.id] = `Score: ${score}% (graded externally)`
-      }
+    setPhase('grading')
+    setGradingError(null)
+    try {
+      const gradeResult = await gradeQuiz({
+        workerUrl: workerUrl || undefined,
+        apiKey: apiKey || undefined,
+        moduleTitle,
+        questions: quiz.questions,
+        answers,
+        passMark: quiz.passMark,
+      })
+      const prevAttempts = progress.quizAttempts.filter(a => a.quizId === quiz.id).length
+      recordQuizAttempt({
+        quizId: quiz.id,
+        score: gradeResult.totalScore,
+        passed: gradeResult.passed,
+        attemptNumber: prevAttempts + 1,
+        timestamp: new Date().toISOString(),
+        overallFeedback: gradeResult.overallFeedback,
+        questionFeedback: gradeResult.questionFeedback,
+        xpAwarded: gradeResult.xpAwarded,
+      })
+      setResult(gradeResult)
+      setPhase('recorded')
+      onComplete(gradeResult)
+    } catch (err) {
+      setGradingError(err instanceof Error ? err.message : 'Grading failed')
+      setPhase('answering')
     }
-
-    const gradeResult: ClaudeGradingResult = {
-      totalScore: score,
-      passed,
-      overallFeedback: passed
-        ? `You scored ${score}% — passed! Keep it up.`
-        : `You scored ${score}% — need ${quiz.passMark}% to pass. Review the material and try again.`,
-      questionFeedback,
-      xpAwarded,
-    }
-
-    const prevAttempts = progress.quizAttempts.filter(a => a.quizId === quiz.id).length
-    recordQuizAttempt({
-      quizId: quiz.id,
-      score,
-      passed,
-      attemptNumber: prevAttempts + 1,
-      timestamp: new Date().toISOString(),
-      overallFeedback: gradeResult.overallFeedback,
-      questionFeedback,
-      xpAwarded,
-    })
-
-    setResult(gradeResult)
-    setPhase('recorded')
-    onComplete(gradeResult)
   }
 
   function handleRetry() {
     setAnswers({})
     setPhase('answering')
-    setMcResult(null)
-    setExportText('')
     setResult(null)
+    setGradingError(null)
   }
 
   const locked = phase !== 'answering'
-
-  // Filename: "stark-quiz-module-13-final-2026-05-25.txt"
-  const safeTitle = quiz.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-  const dateStr = new Date().toISOString().slice(0, 10)
-  const filename = `stark-quiz-${safeTitle}-${dateStr}.txt`
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -422,6 +220,26 @@ export function QuizEngine({ quiz, moduleTitle, onComplete, onBack }: QuizEngine
         <ResultsBanner result={result} quiz={quiz} onRetry={handleRetry} onContinue={onBack} />
       )}
 
+      {/* Grading overlay (phase: grading) */}
+      {phase === 'grading' && (
+        <div className="card p-8 text-center mb-6 space-y-3">
+          <Loader2 size={32} className="animate-spin text-spark-400 mx-auto" />
+          <p className="font-heading text-sm font-bold text-ink">Grading with Claude…</p>
+          <p className="text-xs text-dim">Analysing your answers and preparing feedback</p>
+        </div>
+      )}
+
+      {/* Error banner */}
+      {gradingError && (
+        <div className="card p-4 mb-6 border-fail/30 bg-fail/5 flex items-start gap-3">
+          <AlertTriangle size={16} className="text-fail shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="text-xs font-bold text-fail">Grading failed</p>
+            <p className="text-xs text-dim">{gradingError}</p>
+          </div>
+        </div>
+      )}
+
       {/* Questions */}
       <div className="space-y-4">
         {quiz.questions.map((q, i) => (
@@ -433,7 +251,7 @@ export function QuizEngine({ quiz, moduleTitle, onComplete, onBack }: QuizEngine
               question={q}
               answer={answers[q.id] ?? ''}
               onChange={v => setAnswer(q.id, v)}
-              feedback={mcResult?.feedback[q.id]}
+              feedback={result?.questionFeedback[q.id]}
               locked={locked}
             />
           </div>
@@ -454,29 +272,6 @@ export function QuizEngine({ quiz, moduleTitle, onComplete, onBack }: QuizEngine
           >
             Submit Quiz
           </button>
-        </div>
-      )}
-
-      {/* Export + score entry (phase: submitted) */}
-      {phase === 'submitted' && (
-        <div className="mt-6 space-y-4">
-          {/* MC-only: show score, record immediately */}
-          {!hasSA ? (
-            <ScoreEntry
-              defaultScore={mcResult?.score ?? 0}
-              hasSA={false}
-              onRecord={handleRecord}
-            />
-          ) : (
-            <>
-              <ExportPanel text={exportText} filename={filename} />
-              <ScoreEntry
-                defaultScore={mcResult?.score ?? 0}
-                hasSA={true}
-                onRecord={handleRecord}
-              />
-            </>
-          )}
         </div>
       )}
     </div>

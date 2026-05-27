@@ -10,12 +10,14 @@ import { useSync } from '@/hooks/useSync'
 export default function SettingsScreen() {
   const {
     workerUrl, setWorkerUrl,
+    apiKey, setApiKey,
     syncServerUrl, setSyncServerUrl,
     githubToken, setGithubToken,
     progress, setUserName,
     addToast,
   } = useAppStore(useShallow(s => ({
     workerUrl: s.workerUrl,         setWorkerUrl: s.setWorkerUrl,
+    apiKey: s.apiKey,               setApiKey: s.setApiKey,
     syncServerUrl: s.syncServerUrl, setSyncServerUrl: s.setSyncServerUrl,
     githubToken: s.githubToken,     setGithubToken: s.setGithubToken,
     progress: s.progress,
@@ -96,23 +98,35 @@ export default function SettingsScreen() {
       {/* ── AI Tutor ── */}
       <section className="card p-5 space-y-4">
         <div className="flex items-center gap-2">
-          <h2 className="font-heading text-sm uppercase tracking-widest text-dim">AI Tutor</h2>
-          <span className="font-mono text-[10px] text-ghost border border-border rounded px-1.5 py-0.5">optional</span>
+          <h2 className="font-heading text-sm uppercase tracking-widest text-dim">AI Tutor &amp; Quiz Grading</h2>
+          <span className="font-mono text-[10px] text-ghost border border-border rounded px-1.5 py-0.5">required for grading</span>
         </div>
         <p className="text-xs text-ghost leading-relaxed">
-          Enables the AI Tutor chat panel inside every lesson and AI-powered project verification.
-          Your Anthropic API key stays server-side in a Cloudflare Worker — it never touches this app.
-          See the{' '}
-          <a
-            href="https://github.com/siddi08/stark-academy/blob/main/stark-proxy/README.md"
-            target="_blank"
-            rel="noreferrer"
-            className="text-spark-300 underline"
-          >
-            Worker setup guide
-          </a>{' '}
-          in the repo.
+          Required for automatic quiz grading, AI Tutor chat, and project verification. Enter either your Anthropic API key (stored locally, only used in-browser) or a Cloudflare Worker proxy URL.
         </p>
+
+        {/* Direct API key */}
+        <div className="space-y-2">
+          <label className="text-xs text-ghost font-body block">Anthropic API key</label>
+          <input
+            className="input font-mono text-sm"
+            value={apiKey}
+            onChange={e => setApiKey(e.target.value)}
+            placeholder="sk-ant-…"
+            type="password"
+            autoComplete="off"
+          />
+          {apiKey.trim() && (
+            <p className="text-xs text-ghost">Saved — quizzes will be graded directly via the API.</p>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs text-ghost">or use a Worker proxy</span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+
         <div className="flex gap-2">
           <input
             className="input flex-1 font-mono text-sm"
@@ -140,7 +154,7 @@ export default function SettingsScreen() {
         </div>
         {workerUrl.trim() && (
           <p className="text-xs text-ghost">
-            Saved — AI Tutor will use this URL.
+            Saved — AI Tutor will use this Worker URL.
           </p>
         )}
       </section>
