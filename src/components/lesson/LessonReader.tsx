@@ -80,7 +80,7 @@ Rules:
     : history
 
   return (
-    <div className="flex flex-col h-full bg-void border-l border-border">
+    <div className="flex-1 flex flex-col min-h-0 bg-void border-l border-border">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
@@ -316,7 +316,7 @@ export function LessonReader({
       {tutorOpen && (
         <div className="lg:hidden fixed inset-0 z-30 flex flex-col">
           <div className="h-1/4 bg-void/80 backdrop-blur-sm" onClick={() => setTutorOpen(false)} />
-          <div className="flex-1 flex flex-col bg-void border-t border-border">
+          <div className="flex-1 flex flex-col min-h-0 bg-void border-t border-border">
             <TutorPanel lesson={lesson} module={module} onClose={() => setTutorOpen(false)} />
           </div>
         </div>
