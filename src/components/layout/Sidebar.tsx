@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import {
-  Home, BookOpen, FlaskConical, BarChart2, Settings, Zap,
+  Home, BookOpen, FlaskConical, BarChart2, Settings, Zap, Sparkles,
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { useProgress } from '@/store/useAppStore'
@@ -13,6 +13,7 @@ const NAV = [
   { to: '/',           icon: Home,         label: 'Home' },
   { to: '/curriculum', icon: BookOpen,      label: 'Curriculum' },
   { to: '/projects',   icon: FlaskConical,  label: 'Projects' },
+  { to: '/ai',         icon: Sparkles,      label: 'Career Advisor' },
   { to: '/progress',   icon: BarChart2,     label: 'Progress' },
   { to: '/settings',   icon: Settings,      label: 'Settings' },
 ] as const
