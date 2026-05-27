@@ -12,6 +12,8 @@ export interface Lesson {
   content: string
   duration: number
   keyTerms: Array<string | KeyTerm>
+  /** YouTube video URL shown above the lesson content (e.g. https://www.youtube.com/watch?v=...) */
+  video?: string
 }
 
 export type QuestionType = 'multiple_choice' | 'short_answer' | 'practical'

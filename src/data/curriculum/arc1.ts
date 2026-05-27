@@ -31,6 +31,7 @@ const m1: Module = {
       id: '1-1', number: '1.1',
       title: 'Binary and the Basis of All Computing',
       duration: 12,
+      video: 'https://www.youtube.com/watch?v=1GSjbWt0c9M',
       content: `# Binary and the Basis of All Computing
 
 Every piece of data in a computer — text, images, audio, and the neural network weights inside Claude — ultimately reduces to sequences of **1s and 0s**. This is not arbitrary: it emerges from the physics of transistors.

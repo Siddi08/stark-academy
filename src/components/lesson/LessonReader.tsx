@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
@@ -7,7 +7,41 @@ import 'highlight.js/styles/atom-one-dark.css'
 import { cn } from '@/utils/cn'
 import { useClaude } from '@/hooks/useClaude'
 import { useWorkerUrl } from '@/store/useAppStore'
+import { CheckpointCard } from './CheckpointCard'
 import type { Lesson, Module, ChatMessage } from '@/types'
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Split markdown at each H2 heading, keeping the heading with its section. */
+function splitIntoSections(markdown: string): string[] {
+  return markdown.split(/(?=\n## )/).filter(s => s.trim())
+}
+
+/** Convert any YouTube URL format to an embed URL. */
+function toYouTubeEmbed(url: string): string {
+  const idMatch =
+    url.match(/[?&]v=([a-zA-Z0-9_-]{11})/) ??
+    url.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/) ??
+    url.match(/embed\/([a-zA-Z0-9_-]{11})/)
+  const id = idMatch?.[1]
+  return id ? `https://www.youtube.com/embed/${id}` : url
+}
+
+// ─── YouTubeEmbed ─────────────────────────────────────────────────────────────
+
+function YouTubeEmbed({ url }: { url: string }) {
+  return (
+    <div className="mb-8 rounded-2xl overflow-hidden border border-border" style={{ aspectRatio: '16/9' }}>
+      <iframe
+        src={toYouTubeEmbed(url)}
+        className="w-full h-full"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+        title="Lesson video"
+      />
+    </div>
+  )
+}
 
 // ─── AI Tutor panel ───────────────────────────────────────────────────────────
 
@@ -56,10 +90,8 @@ Rules:
     setDraft('')
     reset()
 
-    // send() returns the full accumulated text — never stale
     const reply = await send(text, history)
 
-    // Only add to history if we got a reply — keeps the error visible if send() failed
     if (reply) {
       setHistory(prev => [
         ...prev,
@@ -71,10 +103,8 @@ Rules:
       ])
       reset()
     }
-    // If reply is empty, leave the error message visible so the user can see it
   }
 
-  // While waiting for response, show a typing placeholder
   const displayHistory = streaming
     ? [...history, { role: 'assistant' as const, content: '…', timestamp: '' }]
     : history
@@ -208,12 +238,20 @@ export function LessonReader({
   const termStrings = lesson.keyTerms.map(t => typeof t === 'string' ? t : t.term)
   const endRef = useRef<HTMLDivElement>(null)
 
-  // Keep a stable ref to the callback so the IntersectionObserver doesn't need
-  // to be recreated every render.
+  const sections = useMemo(() => splitIntoSections(lesson.content), [lesson.content])
+  // Start with intro + first section visible; skip checkpoints for completed lessons
+  const [unlockedCount, setUnlockedCount] = useState(() =>
+    isCompleted ? sections.length : Math.min(2, sections.length),
+  )
+
+  // Reset when navigating to a different lesson
+  useEffect(() => {
+    setUnlockedCount(isCompleted ? sections.length : Math.min(2, sections.length))
+  }, [lesson.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const onReachEndRef = useRef(onReachEnd)
   useEffect(() => { onReachEndRef.current = onReachEnd })
 
-  // Watch the "Mark as Complete" button; fire onReachEnd once it enters viewport
   useEffect(() => {
     const el = endRef.current
     if (!el) return
@@ -228,7 +266,7 @@ export function LessonReader({
     )
     observer.observe(el)
     return () => observer.disconnect()
-  }, [lesson.id])  // recreate when navigating to a new lesson
+  }, [lesson.id])
 
   return (
     <div className="relative flex">
@@ -250,19 +288,39 @@ export function LessonReader({
             </h1>
           </div>
 
-          {/* Lesson content */}
+          {/* Optional video embed */}
+          {lesson.video && <YouTubeEmbed url={lesson.video} />}
+
+          {/* Sectioned lesson content with checkpoints */}
           <div className="prose-iron">
-            <Markdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeHighlight]}
-            >
-              {lesson.content}
-            </Markdown>
+            {sections.map((section, i) => (
+              <div key={i}>
+                {i < unlockedCount && (
+                  <div className={cn(i > 0 && i === unlockedCount - 1 ? 'animate-fade-up' : '')}>
+                    <Markdown
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeHighlight]}
+                    >
+                      {section}
+                    </Markdown>
+                  </div>
+                )}
+
+                {/* Checkpoint: after sections 1..N-2 (not after intro, not after last) */}
+                {i >= 1 && i < sections.length - 1 && i === unlockedCount - 1 && (
+                  <CheckpointCard
+                    sectionContent={section}
+                    lessonTitle={lesson.title}
+                    onUnlock={() => setUnlockedCount(n => Math.min(n + 1, sections.length))}
+                  />
+                )}
+              </div>
+            ))}
           </div>
 
           {/* Key terms */}
-          {termStrings.length > 0 && (
-            <div className="mt-10 p-5 card-raised rounded-2xl">
+          {termStrings.length > 0 && unlockedCount >= sections.length && (
+            <div className="mt-10 p-5 card-raised rounded-2xl animate-fade-up">
               <h3 className="font-heading text-xs text-spark-400 uppercase tracking-widest mb-3">
                 Key Terms
               </h3>
@@ -279,25 +337,32 @@ export function LessonReader({
             </div>
           )}
 
-          {/* Complete button — observed by IntersectionObserver */}
-          <div ref={endRef} className="mt-10 pb-8">
-            <button
-              onClick={onComplete}
-              disabled={isCompleted}
-              className={cn(
-                'w-full min-h-[52px] font-heading text-base flex items-center justify-center gap-2 rounded-2xl transition-all duration-200',
-                isCompleted
-                  ? 'bg-ok/10 border border-ok/30 text-ok cursor-default'
-                  : 'btn-primary',
-              )}
-            >
-              {isCompleted ? (
-                <>✓ Lesson Complete — 10 XP earned</>
-              ) : (
-                <>Mark as Complete <ChevronRight size={18} /></>
-              )}
-            </button>
-          </div>
+          {/* Complete button — only after all sections unlocked */}
+          {unlockedCount >= sections.length && (
+            <div ref={endRef} className="mt-10 pb-8 animate-fade-up">
+              <button
+                onClick={onComplete}
+                disabled={isCompleted}
+                className={cn(
+                  'w-full min-h-[52px] font-heading text-base flex items-center justify-center gap-2 rounded-2xl transition-all duration-200',
+                  isCompleted
+                    ? 'bg-ok/10 border border-ok/30 text-ok cursor-default'
+                    : 'btn-primary',
+                )}
+              >
+                {isCompleted ? (
+                  <>✓ Lesson Complete — 10 XP earned</>
+                ) : (
+                  <>Mark as Complete <ChevronRight size={18} /></>
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Placeholder div so onReachEnd fires even before all sections unlocked */}
+          {unlockedCount < sections.length && (
+            <div ref={endRef} className="h-px" />
+          )}
         </article>
       </div>
 
@@ -323,7 +388,6 @@ export function LessonReader({
       )}
 
       {/* ── Floating tutor button ── */}
-      {/* Shifts up when the sticky bottom nav becomes visible to avoid overlap  */}
       {!tutorOpen && (
         <button
           onClick={() => setTutorOpen(true)}
