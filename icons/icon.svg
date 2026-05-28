@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="96" fill="#070709"/>
+  <!-- Outer glow ring -->
+  <circle cx="256" cy="256" r="188" fill="none" stroke="#5456F5" stroke-width="6" opacity="0.35"/>
+  <!-- Arc reactor ring -->
+  <circle cx="256" cy="256" r="140" fill="none" stroke="#5456F5" stroke-width="12" opacity="0.7"/>
+  <!-- Inner glow -->
+  <circle cx="256" cy="256" r="100" fill="#5456F5" opacity="0.08"/>
+  <!-- Lightning bolt / spark -->
+  <polygon points="276,128 220,268 258,268 236,384 308,232 268,232" fill="#5456F5"/>
+  <polygon points="276,128 220,268 258,268 236,384 308,232 268,232" fill="url(#spark-grad)" opacity="0.9"/>
+  <defs>
+    <linearGradient id="spark-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#9899FF;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#5456F5;stop-opacity:1"/>
+    </linearGradient>
+  </defs>
+</svg>
