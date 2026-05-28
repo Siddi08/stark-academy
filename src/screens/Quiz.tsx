@@ -2,7 +2,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 import { allModules } from '@/data/curriculum'
 import { QuizEngine } from '@/components/quiz/QuizEngine'
-import type { ClaudeGradingResult, Quiz } from '@/types'
+import type { Quiz } from '@/types'
 
 export default function QuizScreen() {
   const { id } = useParams<{ id: string }>()
@@ -27,12 +27,9 @@ export default function QuizScreen() {
 
   const { quiz, module } = found
 
-  function handleComplete(result: ClaudeGradingResult) {
-    // XP is already recorded in QuizEngine via recordQuizAttempt
-    // Navigate back to module after a short delay to let the results render
-    if (result.passed) {
-      setTimeout(() => navigate(`/module/${module.id}`), 200)
-    }
+  function handleComplete() {
+    // XP is recorded in QuizEngine via recordQuizAttempt.
+    // Navigation is handled by the "Continue →" button in the results banner.
   }
 
   return (
