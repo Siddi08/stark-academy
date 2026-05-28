@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
@@ -8,6 +8,7 @@ import { cn } from '@/utils/cn'
 import { useClaude } from '@/hooks/useClaude'
 import { useWorkerUrl } from '@/store/useAppStore'
 import { CheckpointCard } from './CheckpointCard'
+import { LESSON_WIDGETS } from './widgets/registry'
 import type { Lesson, Module, ChatMessage } from '@/types'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -244,6 +245,14 @@ export function LessonReader({
     isCompleted ? sections.length : Math.min(2, sections.length),
   )
 
+  // Build a section-index → Widget lookup for this lesson
+  const widgetsBySection = useMemo(() => {
+    const placements = LESSON_WIDGETS[lesson.id] ?? []
+    const map: Record<number, React.ComponentType> = {}
+    placements.forEach(({ afterSection, Widget }) => { map[afterSection] = Widget })
+    return map
+  }, [lesson.id])
+
   // Reset when navigating to a different lesson
   useEffect(() => {
     setUnlockedCount(isCompleted ? sections.length : Math.min(2, sections.length))
@@ -305,6 +314,12 @@ export function LessonReader({
                     </Markdown>
                   </div>
                 )}
+
+                {/* Inline widget for this section (shown once section is visible) */}
+                {i < unlockedCount && widgetsBySection[i] && (() => {
+                  const W = widgetsBySection[i]
+                  return <W />
+                })()}
 
                 {/* Checkpoint: after sections 1..N-2 (not after intro, not after last) */}
                 {i >= 1 && i < sections.length - 1 && i === unlockedCount - 1 && (
