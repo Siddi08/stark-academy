@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, Fragment } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
@@ -7,7 +7,14 @@ import 'highlight.js/styles/atom-one-dark.css'
 import { cn } from '@/utils/cn'
 import { useClaude } from '@/hooks/useClaude'
 import { useWorkerUrl } from '@/store/useAppStore'
+import { CheckpointCard } from './CheckpointCard'
 import type { Lesson, Module, ChatMessage } from '@/types'
+
+// Split markdown at h2 boundaries, keeping the heading with its section.
+// Returns a single-element array if there are no h2 headings.
+function splitSections(content: string): string[] {
+  return content.split(/(?=\n## )/).filter(s => s.trim().length > 0)
+}
 
 // ─── AI Tutor panel ───────────────────────────────────────────────────────────
 
@@ -205,6 +212,7 @@ export function LessonReader({
   lesson, module, isCompleted, onComplete, onReachEnd, navVisible = false,
 }: LessonReaderProps) {
   const [tutorOpen, setTutorOpen] = useState(false)
+  const workerUrl = useWorkerUrl()
   const termStrings = lesson.keyTerms.map(t => typeof t === 'string' ? t : t.term)
   const endRef = useRef<HTMLDivElement>(null)
 
@@ -250,14 +258,19 @@ export function LessonReader({
             </h1>
           </div>
 
-          {/* Lesson content */}
+          {/* Lesson content with inline checkpoints between sections */}
           <div className="prose-iron">
-            <Markdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeHighlight]}
-            >
-              {lesson.content}
-            </Markdown>
+            {splitSections(lesson.content).map((section, i, arr) => (
+              <Fragment key={i}>
+                <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                  {section}
+                </Markdown>
+                {/* Checkpoint after every section except the last */}
+                {i < arr.length - 1 && section.trim().length > 300 && (
+                  <CheckpointCard sectionContent={section} workerUrl={workerUrl} />
+                )}
+              </Fragment>
+            ))}
           </div>
 
           {/* Key terms */}

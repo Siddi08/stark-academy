@@ -1,5 +1,19 @@
 import type { ClaudeGradingResult, QuizQuestion } from '@/types'
 
+export interface CheckpointQuestion {
+  question: string
+  options: string[]
+  correctAnswer: string
+  explanation: string
+}
+
+export interface GenerateCheckpointParams {
+  workerUrl: string
+  sectionContent: string
+}
+
+
+
 export interface GradeQuizParams {
   workerUrl: string
   moduleTitle: string
@@ -128,6 +142,42 @@ Help them understand the material. Be concise but thorough. Use examples.`,
       { role: 'user', content: params.userMessage },
     ],
   })
+}
+
+export async function generateCheckpoint(params: GenerateCheckpointParams): Promise<CheckpointQuestion> {
+  const prompt = `You are generating a comprehension check question for Stark Academy, an AI curriculum.
+
+Based on this lesson section, write ONE multiple-choice question that tests understanding of the key concept:
+
+${params.sectionContent.slice(0, 1500)}
+
+CRITICAL: respond with ONLY valid JSON — no markdown, no backticks, no extra text:
+{
+  "question": "<clear, specific question about the key concept>",
+  "options": ["<option A>", "<option B>", "<option C>", "<option D>"],
+  "correctAnswer": "<exact text of the correct option>",
+  "explanation": "<1-2 sentences explaining why the correct answer is right and the others are wrong>"
+}`
+
+  async function attempt(): Promise<string> {
+    return workerPost(params.workerUrl, {
+      model:      'claude-sonnet-4-20250514',
+      max_tokens: 600,
+      messages:   [{ role: 'user', content: prompt }],
+    })
+  }
+
+  try {
+    let text = await attempt()
+    try {
+      return JSON.parse(text) as CheckpointQuestion
+    } catch {
+      text = await attempt()
+      return JSON.parse(text) as CheckpointQuestion
+    }
+  } catch (err) {
+    throw new Error(`Checkpoint failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
+  }
 }
 
 /**
