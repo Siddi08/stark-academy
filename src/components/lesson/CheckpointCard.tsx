@@ -1,13 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
-import { Loader2, CheckCircle2, XCircle, ChevronDown } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, ChevronDown, Send } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { useWorkerUrl } from '@/store/useAppStore'
 
-interface CheckpointQuestion {
+interface CheckpointData {
   question: string
-  options: string[]
-  correct: number
-  explanation: string
+  idealAnswer: string
+}
+
+interface GradeResult {
+  pass: boolean
+  feedback: string
 }
 
 interface CheckpointCardProps {
@@ -17,12 +20,14 @@ interface CheckpointCardProps {
 }
 
 export function CheckpointCard({ sectionContent, lessonTitle, onUnlock }: CheckpointCardProps) {
-  const [question, setQuestion] = useState<CheckpointQuestion | null>(null)
+  const [checkpoint, setCheckpoint] = useState<CheckpointData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selected, setSelected] = useState<number | null>(null)
-  const [revealed, setRevealed] = useState(false)
+  const [answer, setAnswer] = useState('')
+  const [grading, setGrading] = useState(false)
+  const [grade, setGrade] = useState<GradeResult | null>(null)
   const cardRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const didFetch = useRef(false)
   const workerUrl = useWorkerUrl()
 
@@ -33,6 +38,22 @@ export function CheckpointCard({ sectionContent, lessonTitle, onUnlock }: Checkp
     void generateQuestion()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  async function callWorker(prompt: string, maxTokens: number) {
+    if (!workerUrl) throw new Error('No Worker URL')
+    const res = await fetch(workerUrl.replace(/\/$/, ''), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: maxTokens,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    })
+    if (!res.ok) throw new Error(`Worker ${res.status}`)
+    const data = await res.json() as { content?: Array<{ type: string; text?: string }> }
+    return data.content?.find(b => b.type === 'text')?.text ?? ''
+  }
+
   async function generateQuestion() {
     if (!workerUrl) {
       setError('No Worker URL — set it in Settings to enable checkpoints.')
@@ -40,7 +61,8 @@ export function CheckpointCard({ sectionContent, lessonTitle, onUnlock }: Checkp
       return
     }
     try {
-      const prompt = `You are generating a multiple-choice comprehension check for a student who just read a lesson section.
+      const text = await callWorker(
+        `Generate a short-answer comprehension question for a student who just read this lesson section.
 
 Lesson: "${lessonTitle}"
 Section:
@@ -48,32 +70,15 @@ ${sectionContent.slice(0, 2000)}
 
 Return ONLY valid JSON — no markdown, no extra text:
 {
-  "question": "A clear, conceptual question about the section (not trivial recall)",
-  "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
-  "correct": 0,
-  "explanation": "One sentence explaining why the correct answer is right."
-}
+  "question": "A clear conceptual question that requires understanding, not trivial recall. 1–2 sentences.",
+  "idealAnswer": "A concise ideal answer covering the key concepts. 1–3 sentences."
+}`,
+        256,
+      )
 
-The "correct" field is the 0-based index of the correct option.`
-
-      const res = await fetch(workerUrl.replace(/\/$/, ''), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 512,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      })
-
-      if (!res.ok) throw new Error(`Worker ${res.status}`)
-
-      const data = await res.json() as { content?: Array<{ type: string; text?: string }> }
-      const text = data.content?.find(b => b.type === 'text')?.text ?? ''
       const jsonMatch = text.match(/\{[\s\S]*\}/)
       if (!jsonMatch) throw new Error('Malformed response')
-
-      setQuestion(JSON.parse(jsonMatch[0]) as CheckpointQuestion)
+      setCheckpoint(JSON.parse(jsonMatch[0]) as CheckpointData)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not generate question')
     } finally {
@@ -81,7 +86,40 @@ The "correct" field is the 0-based index of the correct option.`
     }
   }
 
-  const isCorrect = revealed && selected === question?.correct
+  async function handleSubmit() {
+    if (!answer.trim() || !checkpoint || grading) return
+    setGrading(true)
+    try {
+      const text = await callWorker(
+        `You are grading a student's short answer.
+
+Question: ${checkpoint.question}
+Ideal answer: ${checkpoint.idealAnswer}
+Student's answer: ${answer.trim()}
+
+Grade the student's answer. Be generous — reward correct concepts even if imperfectly worded.
+Return ONLY valid JSON:
+{
+  "pass": true or false,
+  "feedback": "One or two sentences of specific feedback. If pass, affirm what they got right. If fail, explain what key concept was missing or wrong."
+}`,
+        200,
+      )
+      const jsonMatch = text.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) throw new Error('Malformed grading response')
+      setGrade(JSON.parse(jsonMatch[0]) as GradeResult)
+    } catch (err) {
+      setGrade({ pass: true, feedback: 'Could not grade — continuing.' })
+    } finally {
+      setGrading(false)
+    }
+  }
+
+  function handleRetry() {
+    setAnswer('')
+    setGrade(null)
+    setTimeout(() => textareaRef.current?.focus(), 50)
+  }
 
   return (
     <div
@@ -102,7 +140,7 @@ The "correct" field is the 0-based index of the correct option.`
         </div>
       )}
 
-      {!loading && (error || !question) && (
+      {!loading && (error || !checkpoint) && (
         <div className="flex items-center justify-between">
           <span className="text-xs text-ghost">{error ?? 'Could not load question'}</span>
           <button
@@ -114,65 +152,73 @@ The "correct" field is the 0-based index of the correct option.`
         </div>
       )}
 
-      {!loading && question && (
+      {!loading && checkpoint && (
         <>
-          <p className="text-ink text-sm font-medium leading-relaxed mb-4">{question.question}</p>
+          <p className="text-ink text-sm font-medium leading-relaxed mb-4">{checkpoint.question}</p>
 
-          <div className="space-y-2 mb-4">
-            {question.options.map((opt, idx) => {
-              const isSelected = selected === idx
-              const isCorrectOpt = idx === question.correct
-
-              let cls = 'border-border text-dim hover:border-spark-500/40 hover:text-ink cursor-pointer'
-              if (isSelected && !revealed) cls = 'border-spark-500 text-ink bg-spark-500/10'
-              if (revealed && isCorrectOpt) cls = 'border-ok text-ok bg-ok/10 cursor-default'
-              if (revealed && isSelected && !isCorrectOpt) cls = 'border-fail text-fail bg-fail/10 cursor-default'
-              if (revealed && !isSelected && !isCorrectOpt) cls = 'border-border text-ghost cursor-default'
-
-              return (
+          {/* Answer area */}
+          {!grade && (
+            <>
+              <textarea
+                ref={textareaRef}
+                value={answer}
+                onChange={e => setAnswer(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void handleSubmit()
+                }}
+                disabled={grading}
+                placeholder="Type your answer… (⌘↵ to submit)"
+                rows={3}
+                className="w-full bg-void border border-border rounded-xl px-4 py-3 text-sm text-ink placeholder:text-ghost resize-none focus:outline-none focus:border-spark-500/60 transition-colors mb-3 disabled:opacity-50"
+              />
+              <div className="flex gap-3">
                 <button
-                  key={idx}
-                  onClick={() => !revealed && setSelected(idx)}
-                  disabled={revealed}
-                  className={cn(
-                    'w-full text-left px-4 py-3 rounded-xl text-sm border transition-all min-h-[44px]',
-                    cls,
-                  )}
+                  onClick={() => void handleSubmit()}
+                  disabled={!answer.trim() || grading}
+                  className="btn-primary flex-1 min-h-[44px] text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  {revealed && isCorrectOpt && <CheckCircle2 size={13} className="inline mr-2 mb-0.5" />}
-                  {revealed && isSelected && !isCorrectOpt && <XCircle size={13} className="inline mr-2 mb-0.5" />}
-                  {opt}
+                  {grading
+                    ? <><Loader2 size={13} className="animate-spin" /> Grading…</>
+                    : <><Send size={13} /> Submit</>
+                  }
                 </button>
-              )
-            })}
-          </div>
+                <button onClick={onUnlock} className="btn-ghost px-4 min-h-[44px] text-sm">
+                  Skip
+                </button>
+              </div>
+            </>
+          )}
 
-          {revealed ? (
+          {/* Grade result */}
+          {grade && (
             <div className="space-y-3">
               <div className={cn(
-                'text-xs px-3 py-2.5 rounded-lg leading-relaxed',
-                isCorrect
-                  ? 'bg-ok/10 text-ok border border-ok/20'
-                  : 'bg-warn/10 text-warn border border-warn/20',
+                'flex items-start gap-2.5 text-sm px-4 py-3 rounded-xl border leading-relaxed',
+                grade.pass
+                  ? 'bg-ok/10 text-ok border-ok/20'
+                  : 'bg-warn/10 text-warn border-warn/20',
               )}>
-                {isCorrect ? '✓ Correct. ' : '✗ Not quite. '}{question.explanation}
+                {grade.pass
+                  ? <CheckCircle2 size={15} className="shrink-0 mt-0.5" />
+                  : <XCircle size={15} className="shrink-0 mt-0.5" />
+                }
+                <span>{grade.feedback}</span>
               </div>
-              <button onClick={onUnlock} className="btn-primary w-full min-h-[44px] text-sm flex items-center justify-center gap-1.5">
-                Continue reading <ChevronDown size={14} />
-              </button>
-            </div>
-          ) : (
-            <div className="flex gap-3">
-              <button
-                onClick={() => setRevealed(true)}
-                disabled={selected === null}
-                className="btn-primary flex-1 min-h-[44px] text-sm disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Check Answer
-              </button>
-              <button onClick={onUnlock} className="btn-ghost px-4 min-h-[44px] text-sm">
-                Skip
-              </button>
+
+              {grade.pass ? (
+                <button onClick={onUnlock} className="btn-primary w-full min-h-[44px] text-sm flex items-center justify-center gap-1.5">
+                  Continue reading <ChevronDown size={14} />
+                </button>
+              ) : (
+                <div className="flex gap-3">
+                  <button onClick={handleRetry} className="btn-primary flex-1 min-h-[44px] text-sm">
+                    Try again
+                  </button>
+                  <button onClick={onUnlock} className="btn-ghost px-4 min-h-[44px] text-sm">
+                    Continue anyway
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </>
