@@ -259,19 +259,19 @@ export function LessonReader({
           </div>
 
           {/* Lesson content with inline checkpoints between sections */}
-          <div className="prose-iron">
-            {splitSections(lesson.content).map((section, i, arr) => (
-              <Fragment key={i}>
+          {splitSections(lesson.content).map((section, i, arr) => (
+            <Fragment key={i}>
+              <div className="prose-iron">
                 <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                   {section}
                 </Markdown>
-                {/* Checkpoint after every section except the last */}
-                {i < arr.length - 1 && section.trim().length > 300 && (
-                  <CheckpointCard sectionContent={section} workerUrl={workerUrl} />
-                )}
-              </Fragment>
-            ))}
-          </div>
+              </div>
+              {/* Checkpoint after every section except the last */}
+              {i < arr.length - 1 && section.trim().length > 150 && (
+                <CheckpointCard sectionContent={section} workerUrl={workerUrl} />
+              )}
+            </Fragment>
+          ))}
 
           {/* Key terms */}
           {termStrings.length > 0 && (

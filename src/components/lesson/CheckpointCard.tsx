@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Loader2, CheckCircle, XCircle, Zap } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { generateCheckpoint } from '@/api/anthropic'
@@ -19,24 +19,11 @@ interface Props {
 
 export function CheckpointCard({ sectionContent, workerUrl }: Props) {
   const [state, setState] = useState<State>({ phase: 'idle' })
-  const cardRef = useRef<HTMLDivElement>(null)
 
-  // Auto-generate as soon as the card scrolls into view
+  // Load immediately on mount — don't wait for scroll position
   useEffect(() => {
-    if (!workerUrl || state.phase !== 'idle') return
-    const el = cardRef.current
-    if (!el) return
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          load()
-          observer.disconnect()
-        }
-      },
-      { threshold: 0.3 },
-    )
-    observer.observe(el)
-    return () => observer.disconnect()
+    if (!workerUrl) return
+    load()
   }, [workerUrl]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
@@ -58,7 +45,7 @@ export function CheckpointCard({ sectionContent, workerUrl }: Props) {
   if (state.phase === 'skipped') return null
 
   return (
-    <div ref={cardRef} className="my-8 rounded-2xl border border-spark-500/25 bg-spark-500/5 p-5 animate-fade-in">
+    <div className="my-8 rounded-2xl border border-spark-500/25 bg-spark-500/5 p-5 animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
