@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { CheckCircle, XCircle, Trophy, Copy, Download, FileText } from 'lucide-react'
+import { CheckCircle, XCircle, Trophy, Copy, Download, FileText, Loader2, AlertCircle } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { useAppStore } from '@/store/useAppStore'
 import { useShallow } from 'zustand/react/shallow'
 import type { Quiz, QuizQuestion, ClaudeGradingResult } from '@/types'
+import { gradeQuiz } from '@/api/anthropic'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -196,8 +197,13 @@ function ResultsBanner({ result, quiz, onRetry, onContinue }: ResultsBannerProps
         {passed ? `Passed · Pass mark: ${quiz.passMark}%` : `Failed · Need ${quiz.passMark}% to pass`}
       </p>
       {result.xpAwarded > 0 && (
-        <p className="text-xs text-dim mb-4">
+        <p className="text-xs text-dim mb-3">
           <span className="text-spark-300 font-mono">+{result.xpAwarded} XP</span> awarded
+        </p>
+      )}
+      {result.overallFeedback && (
+        <p className="text-xs text-dim mb-4 max-w-sm mx-auto leading-relaxed">
+          {result.overallFeedback}
         </p>
       )}
       <div className="flex gap-3 justify-center">
@@ -212,7 +218,7 @@ function ResultsBanner({ result, quiz, onRetry, onContinue }: ResultsBannerProps
   )
 }
 
-// ─── Export panel ─────────────────────────────────────────────────────────────
+// ─── Export panel (fallback when no Worker URL) ───────────────────────────────
 
 function ExportPanel({ text, filename }: { text: string; filename: string }) {
   const [copied, setCopied] = useState(false)
@@ -256,7 +262,7 @@ function ExportPanel({ text, filename }: { text: string; filename: string }) {
   )
 }
 
-// ─── Score entry ──────────────────────────────────────────────────────────────
+// ─── Manual score entry (fallback when no Worker URL) ─────────────────────────
 
 function ScoreEntry({
   defaultScore,
@@ -314,7 +320,7 @@ interface QuizEngineProps {
   onBack: () => void
 }
 
-type Phase = 'answering' | 'submitted' | 'recorded'
+type Phase = 'answering' | 'grading' | 'manual' | 'recorded'
 
 export function QuizEngine({ quiz, moduleTitle, onComplete, onBack }: QuizEngineProps) {
   const [answers, setAnswers] = useState<Record<string, string>>({})
@@ -322,10 +328,12 @@ export function QuizEngine({ quiz, moduleTitle, onComplete, onBack }: QuizEngine
   const [mcResult, setMcResult] = useState<ReturnType<typeof gradeMC> | null>(null)
   const [exportText, setExportText] = useState('')
   const [result, setResult] = useState<ClaudeGradingResult | null>(null)
+  const [gradingError, setGradingError] = useState<string | null>(null)
 
-  const { recordQuizAttempt, progress } = useAppStore(useShallow(s => ({
+  const { recordQuizAttempt, progress, workerUrl } = useAppStore(useShallow(s => ({
     recordQuizAttempt: s.recordQuizAttempt,
     progress: s.progress,
+    workerUrl: s.workerUrl,
   })))
 
   const hasSA = quiz.questions.some(q => q.type === 'short_answer')
@@ -336,25 +344,61 @@ export function QuizEngine({ quiz, moduleTitle, onComplete, onBack }: QuizEngine
     setAnswers(prev => ({ ...prev, [questionId]: value }))
   }
 
-  function handleSubmit() {
-    if (!allAnswered) return
-    const mc = gradeMC(quiz, answers)
-    const text = buildExportText(quiz, moduleTitle, answers)
-    setMcResult(mc)
-    setExportText(text)
-    setPhase('submitted')
+  function applyResult(gradeResult: ClaudeGradingResult) {
+    const prevAttempts = progress.quizAttempts.filter(a => a.quizId === quiz.id).length
+    recordQuizAttempt({
+      quizId: quiz.id,
+      score: gradeResult.totalScore,
+      passed: gradeResult.passed,
+      attemptNumber: prevAttempts + 1,
+      timestamp: new Date().toISOString(),
+      overallFeedback: gradeResult.overallFeedback,
+      questionFeedback: gradeResult.questionFeedback,
+      xpAwarded: gradeResult.xpAwarded,
+    })
+    setResult(gradeResult)
+    setPhase('recorded')
+    onComplete(gradeResult)
   }
 
-  function handleRecord(score: number) {
-    const passed = score >= quiz.passMark
+  async function handleSubmit() {
+    if (!allAnswered) return
+    const mc = gradeMC(quiz, answers)
+    setMcResult(mc)
 
-    // XP: full on pass, half on fail — use MC xp if available, else estimate from score
+    if (!workerUrl) {
+      // No worker configured — fall back to manual export flow
+      const text = buildExportText(quiz, moduleTitle, answers)
+      setExportText(text)
+      setPhase('manual')
+      return
+    }
+
+    setPhase('grading')
+    setGradingError(null)
+
+    try {
+      const aiResult = await gradeQuiz({
+        workerUrl,
+        moduleTitle,
+        questions: quiz.questions,
+        answers,
+        passMark: quiz.passMark,
+      })
+      applyResult(aiResult)
+    } catch (err) {
+      setGradingError(err instanceof Error ? err.message : 'Grading failed. Try again.')
+      setPhase('answering')
+    }
+  }
+
+  function handleManualRecord(score: number) {
+    const passed = score >= quiz.passMark
     const totalXp = quiz.questions.reduce((sum, q) => sum + q.xpValue, 0)
     const xpAwarded = passed
       ? Math.round(totalXp * (score / 100))
       : Math.round(totalXp * (score / 100) * 0.5)
 
-    // Merge MC feedback with placeholder for SA
     const questionFeedback: Record<string, string> = { ...(mcResult?.feedback ?? {}) }
     for (const q of quiz.questions) {
       if (q.type === 'short_answer' && !questionFeedback[q.id]) {
@@ -362,7 +406,7 @@ export function QuizEngine({ quiz, moduleTitle, onComplete, onBack }: QuizEngine
       }
     }
 
-    const gradeResult: ClaudeGradingResult = {
+    applyResult({
       totalScore: score,
       passed,
       overallFeedback: passed
@@ -370,23 +414,7 @@ export function QuizEngine({ quiz, moduleTitle, onComplete, onBack }: QuizEngine
         : `You scored ${score}% — need ${quiz.passMark}% to pass. Review the material and try again.`,
       questionFeedback,
       xpAwarded,
-    }
-
-    const prevAttempts = progress.quizAttempts.filter(a => a.quizId === quiz.id).length
-    recordQuizAttempt({
-      quizId: quiz.id,
-      score,
-      passed,
-      attemptNumber: prevAttempts + 1,
-      timestamp: new Date().toISOString(),
-      overallFeedback: gradeResult.overallFeedback,
-      questionFeedback,
-      xpAwarded,
     })
-
-    setResult(gradeResult)
-    setPhase('recorded')
-    onComplete(gradeResult)
   }
 
   function handleRetry() {
@@ -395,14 +423,17 @@ export function QuizEngine({ quiz, moduleTitle, onComplete, onBack }: QuizEngine
     setMcResult(null)
     setExportText('')
     setResult(null)
+    setGradingError(null)
   }
 
   const locked = phase !== 'answering'
 
-  // Filename: "stark-quiz-module-13-final-2026-05-25.txt"
   const safeTitle = quiz.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
   const dateStr = new Date().toISOString().slice(0, 10)
   const filename = `stark-quiz-${safeTitle}-${dateStr}.txt`
+
+  // Feedback to show per question: AI feedback when recorded, MC feedback while grading/manual
+  const activeFeedback = result?.questionFeedback ?? mcResult?.feedback ?? {}
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -417,28 +448,46 @@ export function QuizEngine({ quiz, moduleTitle, onComplete, onBack }: QuizEngine
         </p>
       </div>
 
+      {/* Grading error */}
+      {gradingError && (
+        <div className="mb-4 flex items-start gap-3 px-4 py-3 rounded-xl border border-fail/30 bg-fail/5">
+          <AlertCircle size={16} className="text-fail shrink-0 mt-0.5" />
+          <p className="text-xs text-fail leading-relaxed">{gradingError}</p>
+        </div>
+      )}
+
       {/* Results banner (phase: recorded) */}
       {result && (
         <ResultsBanner result={result} quiz={quiz} onRetry={handleRetry} onContinue={onBack} />
       )}
 
+      {/* Grading spinner (phase: grading) */}
+      {phase === 'grading' && (
+        <div className="mb-6 flex flex-col items-center gap-3 py-10">
+          <Loader2 size={32} className="text-spark-400 animate-spin" />
+          <p className="font-heading text-sm text-dim">AI is marking your quiz…</p>
+        </div>
+      )}
+
       {/* Questions */}
-      <div className="space-y-4">
-        {quiz.questions.map((q, i) => (
-          <div key={q.id}>
-            <p className="font-heading text-xs text-ghost uppercase tracking-wide mb-2">
-              Question {i + 1}
-            </p>
-            <QuestionItem
-              question={q}
-              answer={answers[q.id] ?? ''}
-              onChange={v => setAnswer(q.id, v)}
-              feedback={mcResult?.feedback[q.id]}
-              locked={locked}
-            />
-          </div>
-        ))}
-      </div>
+      {phase !== 'grading' && (
+        <div className="space-y-4">
+          {quiz.questions.map((q, i) => (
+            <div key={q.id}>
+              <p className="font-heading text-xs text-ghost uppercase tracking-wide mb-2">
+                Question {i + 1}
+              </p>
+              <QuestionItem
+                question={q}
+                answer={answers[q.id] ?? ''}
+                onChange={v => setAnswer(q.id, v)}
+                feedback={activeFeedback[q.id]}
+                locked={locked}
+              />
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Submit (phase: answering) */}
       {phase === 'answering' && (
@@ -447,6 +496,12 @@ export function QuizEngine({ quiz, moduleTitle, onComplete, onBack }: QuizEngine
             <span>{answeredCount}/{quiz.questions.length} answered</span>
             {!allAnswered && <span>Answer all questions to submit</span>}
           </div>
+          {!workerUrl && (
+            <p className="text-xs text-dim px-1">
+              No AI Worker configured — results will require manual grading.{' '}
+              <span className="text-spark-300">Set your Worker URL in Settings to enable auto-grading.</span>
+            </p>
+          )}
           <button
             onClick={handleSubmit}
             disabled={!allAnswered}
@@ -457,15 +512,14 @@ export function QuizEngine({ quiz, moduleTitle, onComplete, onBack }: QuizEngine
         </div>
       )}
 
-      {/* Export + score entry (phase: submitted) */}
-      {phase === 'submitted' && (
+      {/* Manual fallback (phase: manual — no Worker URL) */}
+      {phase === 'manual' && (
         <div className="mt-6 space-y-4">
-          {/* MC-only: show score, record immediately */}
           {!hasSA ? (
             <ScoreEntry
               defaultScore={mcResult?.score ?? 0}
               hasSA={false}
-              onRecord={handleRecord}
+              onRecord={handleManualRecord}
             />
           ) : (
             <>
@@ -473,7 +527,7 @@ export function QuizEngine({ quiz, moduleTitle, onComplete, onBack }: QuizEngine
               <ScoreEntry
                 defaultScore={mcResult?.score ?? 0}
                 hasSA={true}
-                onRecord={handleRecord}
+                onRecord={handleManualRecord}
               />
             </>
           )}
