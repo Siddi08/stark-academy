@@ -9,6 +9,7 @@ import { useClaude } from '@/hooks/useClaude'
 import { useWorkerUrl } from '@/store/useAppStore'
 import { CheckpointCard } from './CheckpointCard'
 import { KeyTermsPanel } from './KeyTermsPanel'
+import { LessonBreakdown } from './LessonBreakdown'
 import type { Lesson, Module, ChatMessage } from '@/types'
 
 // Split markdown at h2 boundaries, keeping the heading with its section.
@@ -257,6 +258,9 @@ export function LessonReader({
               {lesson.title}
             </h1>
           </div>
+
+          {/* Lesson breakdown — collapsible outline shown before content */}
+          <LessonBreakdown lesson={lesson} />
 
           {/* Lesson content with inline checkpoints between sections */}
           {splitSections(lesson.content).map((section, i, arr) => (
